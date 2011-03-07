@@ -995,6 +995,7 @@ sh4-softmmu \
 sh4eb-softmmu \
 sparc-softmmu \
 sparc64-softmmu \
+xtensa-softmmu \
 "
     fi
 # the following are Linux specific
@@ -3007,6 +3008,10 @@ case "$target_arch2" in
   s390x)
     target_phys_bits=64
   ;;
+  xtensa)
+    TARGET_ARCH=xtensa
+    target_phys_bits=32
+  ;;
   *)
     echo "Unsupported target CPU"
     exit 1
@@ -3177,6 +3182,10 @@ for i in $ARCH $TARGET_BASE_ARCH ; do
   sparc*)
     echo "CONFIG_SPARC_DIS=y"  >> $config_target_mak
     echo "CONFIG_SPARC_DIS=y"  >> $libdis_config_mak
+  ;;
+  xtensa)
+    echo "CONFIG_XTENSA_DIS=y"  >> $config_target_mak
+    echo "CONFIG_XTENSA_DIS=y"  >> $libdis_config_mak
   ;;
   esac
 done
