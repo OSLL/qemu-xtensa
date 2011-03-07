@@ -366,6 +366,8 @@ obj-s390x-y = s390-virtio-bus.o s390-virtio.o
 
 obj-alpha-y = alpha_palcode.o
 
+obj-xtensa-y += xtensa_pic.o
+
 main.o: QEMU_CFLAGS+=$(GPROF_CFLAGS)
 
 monitor.o: hmp-commands.h qmp-commands.h
