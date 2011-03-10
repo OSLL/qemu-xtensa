@@ -1541,6 +1541,43 @@ static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
     }
     return 4;
 }
+#elif defined(TARGET_XTENSA)
+
+#define GDB_CORE_XML "xtensa-core.xml"
+#define NUM_CORE_REGS (45)
+
+static int cpu_gdb_read_register(CPUState *env, uint8_t *mem_buf, int n)
+{
+    if (n < 0 || n >= NUM_CORE_REGS) {
+        return 0;
+    }
+    if (n == 0) {
+        GET_REG32(env->pc);
+    } else if (n < 17) {
+        GET_REG32(env->regs[n - 1]);
+    } else {
+        GET_REG32(env->sregs[n - 17]);
+    }
+}
+
+static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
+{
+    uint32_t tmp;
+
+    if (n < 0 || n >= NUM_CORE_REGS) {
+        return 0;
+    }
+    tmp = ldl_p(mem_buf);
+
+    if (n == 0) {
+        env->pc = tmp;
+    } else if (n < 17) {
+        env->regs[n - 1] = tmp;
+    } else {
+        env->sregs[n - 17] = tmp;
+    }
+    return 4;
+}
 #else
 
 #define NUM_CORE_REGS 0
@@ -1817,6 +1854,8 @@ static void gdb_set_cpu_pc(GDBState *s, target_ulong pc)
     cpu_synchronize_state(s->c_cpu);
     s->c_cpu->psw.addr = pc;
 #elif defined (TARGET_LM32)
+    s->c_cpu->pc = pc;
+#elif defined(TARGET_XTENSA)
     s->c_cpu->pc = pc;
 #endif
 }

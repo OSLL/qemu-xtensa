@@ -3213,6 +3213,7 @@ case "$target_arch2" in
   ;;
   xtensa)
     TARGET_ARCH=xtensa
+    gdb_xml_files="xtensa-core.xml"
     target_phys_bits=32
   ;;
   *)
