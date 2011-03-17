@@ -105,6 +105,10 @@ enum {
     FSR = 233,
 };
 
+enum {
+    SAR = 3,
+};
+
 typedef struct CPUXtensaState {
     uint64_t options;
     uint32_t regs[16];
