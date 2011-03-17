@@ -114,15 +114,40 @@ static void disas_xtensa_insn(CPUState *env, DisasContext *dc)
 #define RRRN_S RRR_S
 #define RRRN_T RRR_T
 
+#define RRI8_R RRR_R
+#define RRI8_S RRR_S
+#define RRI8_T RRR_T
+#define RRI8_IMM8 (_b2)
+#define RRI8_IMM8_SE ((((_b2) & 0x80) ? 0xffffff00 : 0) | RRI8_IMM8)
+
 #define RI16_IMM16 (((_b1) << 8) | (_b2))
 
 #define CALL_N (((_b0) & 0xc) >> 2)
 #define CALL_OFFSET ((((_b0) & 0x3) << 16) | ((_b1) << 8) | (_b2))
 #define CALL_OFFSET_SE (((_b0 & 0x2) ? 0xfffc0000 : 0) | CALL_OFFSET)
 
+#define BRI12_M ((_b0) & 0x3)
+#define BRI12_S RRR_S
+#define BRI12_IMM12 ((((_b1) & 0xf) << 8) | (_b2))
+#define BRI12_IMM12_SE ((((_b1) & 0x8) ? 0xfffff000 : 0) | BRI12_IMM12)
+
+#define BRI8_M BRI12_M
+#define BRI8_R RRI8_R
+#define BRI8_S RRI8_S
+#define BRI8_IMM8 RRI8_IMM8
+#define BRI8_IMM8_SE RRI8_IMM8_SE
+
     uint8_t _b0 = ldub_code(dc->pc);
     uint8_t _b1 = ldub_code(dc->pc + 1);
     uint8_t _b2 = ldub_code(dc->pc + 2);
+
+    static const uint32_t B4CONST[] = {
+        0xffffffff, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 32, 64, 128, 256
+    };
+
+    static const uint32_t B4CONSTU[] = {
+        32768, 65536, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 32, 64, 128, 256
+    };
 
     switch (_OP0) {
     case 0: /*QRST*/
@@ -292,34 +317,113 @@ static void disas_xtensa_insn(CPUState *env, DisasContext *dc)
     case 5: /*CALLN*/
         switch (CALL_N) {
         case 0: /*CALL0*/
-            {
-                tcg_gen_movi_i32(cpu_R[0], dc->pc + 3);
-                tcg_gen_movi_i32(cpu_pc,
-                        (dc->pc & ~3) + (CALL_OFFSET_SE << 2) + 4);
-                tcg_gen_exit_tb(0);
-                dc->is_jmp = DISAS_TB_JUMP;
-            }
+            tcg_gen_movi_i32(cpu_R[0], dc->pc + 3);
+            gen_jumpi(dc, (dc->pc & ~3) + (CALL_OFFSET_SE << 2) + 4);
             break;
 
+        case 1: /*CALL4w*/
+        case 2: /*CALL8w*/
+        case 3: /*CALL12w*/
+            HAS_OPTION(XTENSA_OPTION_WINDOWED_REGISTER);
+            break;
         }
         break;
 
     case 6: /*SI*/
         switch (CALL_N) {
         case 0: /*J*/
-            {
-                uint32_t dest = dc->pc + 4 + CALL_OFFSET_SE;
+            gen_jumpi(dc, dc->pc + 4 + CALL_OFFSET_SE);
+            break;
 
-                if ((dc->tb->pc & TARGET_PAGE_MASK) ==
-                        (dest & TARGET_PAGE_MASK)) {
-                    tcg_gen_goto_tb(0);
-                    tcg_gen_movi_i32(cpu_pc, dest);
-                    tcg_gen_exit_tb((long)dc->tb);
-                } else {
-                    tcg_gen_movi_i32(cpu_pc, dest);
-                    tcg_gen_exit_tb(0);
+        case 1: /*BZ*/
+            {
+                int label = gen_new_label();
+                int inv = BRI12_M & 1;
+
+                switch (BRI12_M & 2) {
+                case 0: /*BEQZ*/
+                    tcg_gen_brcondi_i32(inv ? TCG_COND_EQ : TCG_COND_NE,
+                            cpu_R[BRI12_S], 0, label);
+                    break;
+
+                case 2: /*BLTZ*/
+                    tcg_gen_brcondi_i32(inv ? TCG_COND_LT : TCG_COND_GE,
+                            cpu_R[BRI12_S], 0, label);
+                    break;
                 }
-                dc->is_jmp = DISAS_TB_JUMP;
+                gen_jumpi(dc, dc->pc + 4 + BRI12_IMM12_SE);
+                gen_set_label(label);
+                gen_jumpi(dc, dc->pc + 3);
+            }
+            break;
+
+        case 2: /*BI0*/
+            {
+                int label = gen_new_label();
+                int inv = BRI8_M & 1;
+
+                switch (BRI8_M & 2) {
+                case 0: /*BEQI*/
+                    tcg_gen_brcondi_i32(inv ? TCG_COND_EQ : TCG_COND_NE,
+                            cpu_R[BRI8_S], B4CONST[BRI8_R], label);
+                    break;
+
+                case 2: /*BLTI*/
+                    tcg_gen_brcondi_i32(inv ? TCG_COND_LT : TCG_COND_GE,
+                            cpu_R[BRI8_S], B4CONST[BRI8_R], label);
+                    break;
+                }
+                gen_jumpi(dc, dc->pc + 4 + BRI8_IMM8_SE);
+                gen_set_label(label);
+                gen_jumpi(dc, dc->pc + 3);
+            }
+            break;
+
+        case 3: /*BI1*/
+            switch (BRI8_M) {
+            case 0: /*ENTRYw*/
+                HAS_OPTION(XTENSA_OPTION_WINDOWED_REGISTER);
+                break;
+
+            case 1: /*B1*/
+                switch (BRI8_R) {
+                case 0: /*BFp*/
+                    HAS_OPTION(XTENSA_OPTION_BOOLEAN);
+                    break;
+
+                case 1: /*BTp*/
+                    HAS_OPTION(XTENSA_OPTION_BOOLEAN);
+                    break;
+
+                case 8: /*LOOP*/
+                    break;
+
+                case 9: /*LOOPNEZ*/
+                    break;
+
+                case 10: /*LOOPGTZ*/
+                    break;
+
+                default: /*reserved*/
+                    break;
+
+                }
+                break;
+
+            case 2: /*BLTUI*/
+            case 3: /*BGEUI*/
+                {
+                    int label = gen_new_label();
+                    int inv = BRI8_M & 1;
+
+                    tcg_gen_brcondi_i32(inv ? TCG_COND_LTU : TCG_COND_GEU,
+                            cpu_R[BRI8_S], B4CONSTU[BRI8_R], label);
+
+                    gen_jumpi(dc, dc->pc + 4 + BRI8_IMM8_SE);
+                    gen_set_label(label);
+                    gen_jumpi(dc, dc->pc + 3);
+                }
+                break;
             }
             break;
 
@@ -327,6 +431,77 @@ static void disas_xtensa_insn(CPUState *env, DisasContext *dc)
         break;
 
     case 7: /*B*/
+        {
+            int label = gen_new_label();
+            int inv = RRI8_R & 8;
+
+            switch (RRI8_R & 7) {
+            case 0: /*BNONE*/
+                {
+                    TCGv_i32 tmp = tcg_temp_new_i32();
+                    tcg_gen_and_i32(tmp, cpu_R[RRI8_S], cpu_R[RRI8_T]);
+                    tcg_gen_brcondi_i32(inv ? TCG_COND_EQ : TCG_COND_NE,
+                            tmp, 0, label);
+                    tcg_temp_free(tmp);
+                }
+                break;
+
+            case 1: /*BEQ*/
+                tcg_gen_brcond_i32(inv ? TCG_COND_EQ : TCG_COND_NE,
+                        cpu_R[RRI8_S], cpu_R[RRI8_T], label);
+                break;
+
+            case 2: /*BLT*/
+                tcg_gen_brcond_i32(inv ? TCG_COND_LT : TCG_COND_GE,
+                        cpu_R[RRI8_S], cpu_R[RRI8_T], label);
+                break;
+
+            case 3: /*BLTU*/
+                tcg_gen_brcond_i32(inv ? TCG_COND_LTU : TCG_COND_GEU,
+                        cpu_R[RRI8_S], cpu_R[RRI8_T], label);
+                break;
+
+            case 4: /*BALL*/
+                {
+                    TCGv_i32 tmp = tcg_temp_new_i32();
+                    tcg_gen_and_i32(tmp, cpu_R[RRI8_S], cpu_R[RRI8_T]);
+                    tcg_gen_brcond_i32(inv ? TCG_COND_EQ : TCG_COND_NE,
+                            tmp, cpu_R[RRI8_T], label);
+                    tcg_temp_free(tmp);
+                }
+                break;
+
+            case 5: /*BBC*/
+                {
+                    TCGv_i32 bit = tcg_const_i32(1);
+                    TCGv_i32 tmp = tcg_temp_new_i32();
+                    tcg_gen_andi_i32(tmp, cpu_R[RRI8_T], 0x1f);
+                    tcg_gen_shl_i32(bit, bit, tmp);
+                    tcg_gen_and_i32(tmp, cpu_R[RRI8_S], bit);
+                    tcg_gen_brcondi_i32(inv ? TCG_COND_EQ : TCG_COND_NE,
+                            tmp, 0, label);
+                    tcg_temp_free(tmp);
+                    tcg_temp_free(bit);
+                }
+                break;
+
+            case 6: /*BBCI*/
+            case 7:
+                {
+                    TCGv_i32 tmp = tcg_temp_new_i32();
+                    tcg_gen_andi_i32(tmp, cpu_R[RRI8_S],
+                            1 << (((RRI8_R & 1) << 4) | RRI8_T));
+                    tcg_gen_brcondi_i32(inv ? TCG_COND_EQ : TCG_COND_NE,
+                            tmp, 0, label);
+                    tcg_temp_free(tmp);
+                }
+                break;
+
+            }
+            gen_jumpi(dc, dc->pc + 4 + RRI8_IMM8_SE);
+            gen_set_label(label);
+            gen_jumpi(dc, dc->pc + 3);
+        }
         break;
 
 #define gen_narrow_load_store(type) \
