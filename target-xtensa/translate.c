@@ -162,6 +162,14 @@ static void disas_xtensa_insn(DisasContext *dc)
         } \
     } while (0)
 
+#define TBD() printf("TBD(pc = %08x): %s:%d\n", dc->pc, __FILE__, __LINE__)
+#define RESERVED() do { \
+        printf("RESERVED(pc = %08x, %02x%02x%02x): %s:%d\n", \
+                dc->pc, _b0, _b1, _b2, __FILE__, __LINE__); \
+        goto invalid_opcode; \
+    } while (0)
+
+
 #define _OP0 (((_b0) & 0xf0) >> 4)
 #define _OP1 (((_b2) & 0xf0) >> 4)
 #define _OP2 ((_b2) & 0xf)
@@ -228,9 +236,11 @@ static void disas_xtensa_insn(DisasContext *dc)
                 case 0: /*SNM0*/
                     switch (CALLX_M) {
                     case 0: /*ILL*/
+                        TBD();
                         break;
 
                     case 1: /*reserved*/
+                        RESERVED();
                         break;
 
                     case 2: /*JR*/
@@ -242,9 +252,11 @@ static void disas_xtensa_insn(DisasContext *dc)
 
                         case 1: /*RETWw*/
                             HAS_OPTION(XTENSA_OPTION_WINDOWED_REGISTER);
+                            TBD();
                             break;
 
                         case 3: /*reserved*/
+                            RESERVED();
                             break;
                         }
                         break;
@@ -265,6 +277,7 @@ static void disas_xtensa_insn(DisasContext *dc)
                         case 2: /*CALLX8w*/
                         case 3: /*CALLX12w*/
                             HAS_OPTION(XTENSA_OPTION_WINDOWED_REGISTER);
+                            TBD();
                             break;
                         }
                         break;
@@ -273,12 +286,59 @@ static void disas_xtensa_insn(DisasContext *dc)
 
                 case 1: /*MOVSPw*/
                     HAS_OPTION(XTENSA_OPTION_WINDOWED_REGISTER);
+                    TBD();
                     break;
 
                 case 2: /*SYNC*/
+                    TBD();
                     break;
 
-                case 3:
+                case 3: /*RFEIx*/
+                    TBD();
+                    break;
+
+                case 4: /*BREAKx*/
+                    HAS_OPTION(XTENSA_OPTION_EXCEPTION);
+                    TBD();
+                    break;
+
+                case 5: /*SYSCALLx*/
+                    HAS_OPTION(XTENSA_OPTION_EXCEPTION);
+                    TBD();
+                    break;
+
+                case 6: /*RSILx*/
+                    HAS_OPTION(XTENSA_OPTION_INTERRUPT);
+                    TBD();
+                    break;
+
+                case 7: /*WAITIx*/
+                    HAS_OPTION(XTENSA_OPTION_INTERRUPT);
+                    TBD();
+                    break;
+
+                case 8: /*ANY4p*/
+                    HAS_OPTION(XTENSA_OPTION_BOOLEAN);
+                    TBD();
+                    break;
+
+                case 9: /*ALL4p*/
+                    HAS_OPTION(XTENSA_OPTION_BOOLEAN);
+                    TBD();
+                    break;
+
+                case 10: /*ANY8p*/
+                    HAS_OPTION(XTENSA_OPTION_BOOLEAN);
+                    TBD();
+                    break;
+
+                case 11: /*ALL8p*/
+                    HAS_OPTION(XTENSA_OPTION_BOOLEAN);
+                    TBD();
+                    break;
+
+                default: /*reserved*/
+                    RESERVED();
                     break;
 
                 }
@@ -339,17 +399,21 @@ static void disas_xtensa_insn(DisasContext *dc)
                     break;
 
                 case 6: /*RER*/
+                    TBD();
                     break;
 
                 case 7: /*WER*/
+                    TBD();
                     break;
 
                 case 8: /*ROTWw*/
                     HAS_OPTION(XTENSA_OPTION_WINDOWED_REGISTER);
+                    TBD();
                     break;
 
                 case 14: /*NSAu*/
                     HAS_OPTION(XTENSA_OPTION_MISC_OP);
+                    TBD();
                     break;
 
                 case 15: /*NSAUu*/
@@ -390,11 +454,13 @@ static void disas_xtensa_insn(DisasContext *dc)
                     break;
 
                 default: /*reserved*/
+                    RESERVED();
                     break;
                 }
                 break;
 
             case 5: /*TLB*/
+                TBD();
                 break;
 
             case 6: /*RT0*/
@@ -415,11 +481,13 @@ static void disas_xtensa_insn(DisasContext *dc)
                     break;
 
                 default: /*reserved*/
+                    RESERVED();
                     break;
                 }
                 break;
 
             case 7: /*reserved*/
+                RESERVED();
                 break;
 
             case 8: /*ADD*/
@@ -479,6 +547,9 @@ static void disas_xtensa_insn(DisasContext *dc)
                     gen_rsr(cpu_R[RRR_T], RSR_SR);
                     gen_wsr(dc, RSR_SR, tmp);
                     tcg_temp_free(tmp);
+                    if (!sregnames[RSR_SR]) {
+                        TBD();
+                    }
                 }
                 break;
 
@@ -558,21 +629,29 @@ static void disas_xtensa_insn(DisasContext *dc)
                 break;
 
             default: /*reserved*/
+                RESERVED();
                 break;
             }
             break;
 
         case 2: /*RST2*/
+            TBD();
             break;
 
         case 3: /*RST3*/
             switch (_OP2) {
             case 0: /*RSR*/
                 gen_rsr(cpu_R[RRR_T], RSR_SR);
+                if (!sregnames[RSR_SR]) {
+                    TBD();
+                }
                 break;
 
             case 1: /*WSR*/
                 gen_wsr(dc, RSR_SR, cpu_R[RRR_T]);
+                if (!sregnames[RSR_SR]) {
+                    TBD();
+                }
                 break;
 
             case 2: /*SEXTu*/
@@ -657,10 +736,12 @@ static void disas_xtensa_insn(DisasContext *dc)
 
             case 12: /*MOVFp*/
                 HAS_OPTION(XTENSA_OPTION_BOOLEAN);
+                TBD();
                 break;
 
             case 13: /*MOVTp*/
                 HAS_OPTION(XTENSA_OPTION_BOOLEAN);
+                TBD();
                 break;
 
             case 14: /*RUR*/
@@ -670,6 +751,7 @@ static void disas_xtensa_insn(DisasContext *dc)
                         tcg_gen_mov_i32(cpu_R[RRR_R], cpu_UR[st]);
                     } else {
                         printf("rur %d not implemented, ", st);
+                        TBD();
                     }
                 }
                 break;
@@ -680,6 +762,7 @@ static void disas_xtensa_insn(DisasContext *dc)
                         tcg_gen_mov_i32(cpu_UR[RSR_SR], cpu_R[RRR_T]);
                     } else {
                         printf("wur %d not implemented, ", RSR_SR);
+                        TBD();
                     }
                 }
                 break;
@@ -701,27 +784,34 @@ static void disas_xtensa_insn(DisasContext *dc)
             break;
 
         case 6: /*CUST0*/
+            RESERVED();
             break;
 
         case 7: /*CUST1*/
+            RESERVED();
             break;
 
         case 8: /*LSCXp*/
             HAS_OPTION(XTENSA_OPTION_COPROCESSOR);
+            TBD();
             break;
 
         case 9: /*LSC4*/
+            TBD();
             break;
 
         case 10: /*FP0*/
             HAS_OPTION(XTENSA_OPTION_FP_COPROCESSOR);
+            TBD();
             break;
 
         case 11: /*FP1*/
             HAS_OPTION(XTENSA_OPTION_FP_COPROCESSOR);
+            TBD();
             break;
 
         default: /*reserved*/
+            RESERVED();
             break;
         }
         break;
@@ -773,6 +863,7 @@ static void disas_xtensa_insn(DisasContext *dc)
             break;
 
         case 7: /*CACHEc*/
+            TBD();
             break;
 
         case 9: /*L16SI*/
@@ -824,6 +915,7 @@ static void disas_xtensa_insn(DisasContext *dc)
             break;
 
         default: /*reserved*/
+            RESERVED();
             break;
         }
         break;
@@ -831,10 +923,12 @@ static void disas_xtensa_insn(DisasContext *dc)
 
     case 3: /*LSCIp*/
         HAS_OPTION(XTENSA_OPTION_COPROCESSOR);
+        TBD();
         break;
 
     case 4: /*MAC16d*/
         HAS_OPTION(XTENSA_OPTION_MAC16);
+        TBD();
         break;
 
     case 5: /*CALLN*/
@@ -848,6 +942,7 @@ static void disas_xtensa_insn(DisasContext *dc)
         case 2: /*CALL8w*/
         case 3: /*CALL12w*/
             HAS_OPTION(XTENSA_OPTION_WINDOWED_REGISTER);
+            TBD();
             break;
         }
         break;
@@ -906,28 +1001,35 @@ static void disas_xtensa_insn(DisasContext *dc)
             switch (BRI8_M) {
             case 0: /*ENTRYw*/
                 HAS_OPTION(XTENSA_OPTION_WINDOWED_REGISTER);
+                TBD();
                 break;
 
             case 1: /*B1*/
                 switch (BRI8_R) {
                 case 0: /*BFp*/
                     HAS_OPTION(XTENSA_OPTION_BOOLEAN);
+                    TBD();
                     break;
 
                 case 1: /*BTp*/
                     HAS_OPTION(XTENSA_OPTION_BOOLEAN);
+                    TBD();
                     break;
 
                 case 8: /*LOOP*/
+                    TBD();
                     break;
 
                 case 9: /*LOOPNEZ*/
+                    TBD();
                     break;
 
                 case 10: /*LOOPGTZ*/
+                    TBD();
                     break;
 
                 default: /*reserved*/
+                    RESERVED();
                     break;
 
                 }
@@ -1081,28 +1183,35 @@ static void disas_xtensa_insn(DisasContext *dc)
                 break;
 
             case 1: /*RETW.Nn*/
+                HAS_OPTION(XTENSA_OPTION_WINDOWED_REGISTER);
+                TBD();
                 break;
 
             case 2: /*BREAK.Nn*/
+                TBD();
                 break;
 
             case 3: /*NOP.Nn*/
                 break;
 
             case 6: /*ILL.Nn*/
+                TBD();
                 break;
 
             default: /*reserved*/
+                RESERVED();
                 break;
             }
             break;
 
         default: /*reserved*/
+            RESERVED();
             break;
         }
         break;
 
     default: /*reserved*/
+        RESERVED();
         break;
     }
 
