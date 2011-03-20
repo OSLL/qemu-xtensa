@@ -1029,6 +1029,7 @@ sh4eb-softmmu \
 sparc-softmmu \
 sparc64-softmmu \
 xtensa-softmmu \
+xtensaeb-softmmu \
 "
     fi
 # the following are Linux specific
@@ -3016,7 +3017,7 @@ target_arch2=`echo $target | cut -d '-' -f 1`
 target_bigendian="no"
 
 case "$target_arch2" in
-  armeb|lm32|m68k|microblaze|mips|mipsn32|mips64|ppc|ppcemb|ppc64|ppc64abi32|s390x|sh4eb|sparc|sparc64|sparc32plus)
+  armeb|lm32|m68k|microblaze|mips|mipsn32|mips64|ppc|ppcemb|ppc64|ppc64abi32|s390x|sh4eb|sparc|sparc64|sparc32plus|xtensaeb)
   target_bigendian=yes
   ;;
 esac
@@ -3211,7 +3212,7 @@ case "$target_arch2" in
   unicore32)
     target_phys_bits=32
   ;;
-  xtensa)
+  xtensa|xtensaeb)
     TARGET_ARCH=xtensa
     gdb_xml_files="xtensa-core.xml"
     target_phys_bits=32
@@ -3391,7 +3392,7 @@ for i in $ARCH $TARGET_BASE_ARCH ; do
     echo "CONFIG_SPARC_DIS=y"  >> $config_target_mak
     echo "CONFIG_SPARC_DIS=y"  >> $libdis_config_mak
   ;;
-  xtensa)
+  xtensa*)
     echo "CONFIG_XTENSA_DIS=y"  >> $config_target_mak
     echo "CONFIG_XTENSA_DIS=y"  >> $libdis_config_mak
   ;;

@@ -170,12 +170,21 @@ static void disas_xtensa_insn(DisasContext *dc)
     } while (0)
 
 
+#ifdef TARGET_WORDS_BIGENDIAN
 #define _OP0 (((_b0) & 0xf0) >> 4)
 #define _OP1 (((_b2) & 0xf0) >> 4)
 #define _OP2 ((_b2) & 0xf)
 #define RRR_R ((_b1) & 0xf)
 #define RRR_S (((_b1) & 0xf0) >> 4)
 #define RRR_T ((_b0) & 0xf)
+#else
+#define _OP0 (((_b0) & 0xf))
+#define _OP1 (((_b2) & 0xf))
+#define _OP2 (((_b2) & 0xf0) >> 4)
+#define RRR_R (((_b1) & 0xf0) >> 4)
+#define RRR_S (((_b1) & 0xf))
+#define RRR_T (((_b0) & 0xf0) >> 4)
+#endif
 
 #define RRRN_R RRR_R
 #define RRRN_S RRR_S
@@ -187,20 +196,38 @@ static void disas_xtensa_insn(DisasContext *dc)
 #define RRI8_IMM8 (_b2)
 #define RRI8_IMM8_SE ((((_b2) & 0x80) ? 0xffffff00 : 0) | RRI8_IMM8)
 
+#ifdef TARGET_WORDS_BIGENDIAN
 #define RI16_IMM16 (((_b1) << 8) | (_b2))
+#else
+#define RI16_IMM16 (((_b2) << 8) | (_b1))
+#endif
 
+#ifdef TARGET_WORDS_BIGENDIAN
 #define CALL_N (((_b0) & 0xc) >> 2)
 #define CALL_OFFSET ((((_b0) & 0x3) << 16) | ((_b1) << 8) | (_b2))
-#define CALL_OFFSET_SE (((_b0 & 0x2) ? 0xfffc0000 : 0) | CALL_OFFSET)
+#else
+#define CALL_N (((_b0) & 0x30) >> 4)
+#define CALL_OFFSET ((((_b0) & 0xc0) >> 6) | ((_b1) << 2) | ((_b2) << 10))
+#endif
+#define CALL_OFFSET_SE \
+    (((CALL_OFFSET & 0x20000) ? 0xfffc0000 : 0) | CALL_OFFSET)
 
 #define CALLX_N CALL_N
+#ifdef TARGET_WORDS_BIGENDIAN
 #define CALLX_M ((_b0) & 0x3)
+#else
+#define CALLX_M (((_b0) & 0xc0) >> 6)
+#endif
 #define CALLX_S RRR_S
 
 #define BRI12_M CALLX_M
 #define BRI12_S RRR_S
+#ifdef TARGET_WORDS_BIGENDIAN
 #define BRI12_IMM12 ((((_b1) & 0xf) << 8) | (_b2))
-#define BRI12_IMM12_SE ((((_b1) & 0x8) ? 0xfffff000 : 0) | BRI12_IMM12)
+#else
+#define BRI12_IMM12 ((((_b1) & 0xf0) >> 4) | ((_b2) << 4))
+#endif
+#define BRI12_IMM12_SE (((BRI12_IMM12 & 0x800) ? 0xfffff000 : 0) | BRI12_IMM12)
 
 #define BRI8_M BRI12_M
 #define BRI8_R RRI8_R
