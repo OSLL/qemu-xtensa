@@ -44,9 +44,13 @@ static void xtensa_init(ram_addr_t ram_size,
     if (kernel_filename) {
         uint64_t elf_entry;
         uint64_t elf_lowaddr;
-
+#ifdef TARGET_WORDS_BIGENDIAN
+        int success = load_elf(kernel_filename, NULL, NULL, &elf_entry,
+                &elf_lowaddr, NULL, 1, ELF_MACHINE, 0);
+#else
         int success = load_elf(kernel_filename, NULL, NULL, &elf_entry,
                 &elf_lowaddr, NULL, 0, ELF_MACHINE, 0);
+#endif
         if (success > 0) {
             env->pc = elf_entry;
         }
