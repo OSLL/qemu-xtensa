@@ -37,6 +37,7 @@
 void cpu_reset(CPUXtensaState *env)
 {
     env->pc = 0;
+    env->sregs[PS] = 0x1f;
 }
 
 CPUXtensaState *cpu_xtensa_init(const char *cpu_model)
@@ -71,4 +72,25 @@ target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
 
 void do_interrupt(CPUState *env)
 {
+    static const uint32_t vector[] = {
+        [EXC_WINDOW_OVERFLOW4] = WINDOW_OVERFLOW4,
+        [EXC_WINDOW_UNDERFLOW4] = WINDOW_UNDERFLOW4,
+        [EXC_WINDOW_OVERFLOW8] = WINDOW_OVERFLOW8,
+        [EXC_WINDOW_UNDERFLOW8] = WINDOW_UNDERFLOW8,
+        [EXC_WINDOW_OVERFLOW12] = WINDOW_OVERFLOW12,
+        [EXC_WINDOW_UNDERFLOW12] = WINDOW_UNDERFLOW12,
+    };
+
+    switch (env->exception_index) {
+    case EXC_WINDOW_OVERFLOW4:
+    case EXC_WINDOW_UNDERFLOW4:
+    case EXC_WINDOW_OVERFLOW8:
+    case EXC_WINDOW_UNDERFLOW8:
+    case EXC_WINDOW_OVERFLOW12:
+    case EXC_WINDOW_UNDERFLOW12:
+        env->pc = vector[env->exception_index];
+        break;
+
+    }
+    env->interrupt_request |= CPU_INTERRUPT_EXITTB;
 }

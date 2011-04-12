@@ -55,6 +55,8 @@ static TCGv_i32 cpu_UR[256];
 static const char * const sregnames[256] = {
     [SAR] = "SAR",
     [SCOMPARE1] = "SCOMPARE1",
+    [EPC1] = "EPC1",
+    [PS] = "PS",
 };
 
 static const char * const uregnames[256] = {

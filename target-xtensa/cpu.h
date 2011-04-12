@@ -108,6 +108,81 @@ enum {
 enum {
     SAR = 3,
     SCOMPARE1 = 12,
+    EPC1 = 177,
+    PS = 230,
+};
+
+#define PS_INTLEVEL 0xf
+#define PS_INTLEVEL_SHIFT 0
+
+#define PS_EXCM 0x10
+#define PS_UM 0x20
+
+#define PS_RING 0xc0
+#define PS_RING_SHIFT 6
+
+#define PS_OWB 0xf00
+#define PS_OWB_SHIFT 8
+
+#define PS_CALLINC 0x30000
+#define PS_CALLINC_SHIFT 16
+#define PS_CALLINC_LEN 2
+
+#define PS_WOE 0x40000
+
+#define WINDOW_OVERFLOW4 0x5fff8400
+#define WINDOW_OVERFLOW8 0x5fff8480
+#define WINDOW_OVERFLOW12 0x5fff8500
+
+#define WINDOW_UNDERFLOW4 0x5fff8440
+#define WINDOW_UNDERFLOW8 0x5fff84c0
+#define WINDOW_UNDERFLOW12 0x5fff8540
+
+#define KERNEL_EXCEPTION_VECTOR 0x5fff861c
+#define USER_EXCEPTION_VECTOR 0x5fff863c
+#define DOUBLE_EXCEPTION_VECTOR 0x5fff865c
+
+enum {
+    EXC_MIN = 0,
+    EXC_WINDOW_OVERFLOW4,
+    EXC_WINDOW_UNDERFLOW4,
+    EXC_WINDOW_OVERFLOW8,
+    EXC_WINDOW_UNDERFLOW8,
+    EXC_WINDOW_OVERFLOW12,
+    EXC_WINDOW_UNDERFLOW12,
+    EXC_IRQ,
+    EXC_KERNEL,
+    EXC_USER,
+    EXC_DOUBLE
+};
+
+enum {
+    ILLEGAL_INSTRUCTION_CAUSE = 0,
+    SYSCALL_CAUSE,
+    INSTRUCTION_FETCH_ERROR_CAUSE,
+    LOAD_STORE_ERROR_CAUSE,
+    LEVEL1_INTERRUPT_CAUSE,
+    ALLOCA_CAUSE,
+    INTEGER_DIVIE_BY_ZERO_CAUSE,
+    PRIVILEGED_CAUSE = 8,
+    LOAD_STORE_ALIGNMENT_CAUSE,
+
+    INSTR_PIF_DATA_ERROR_CAUSE = 12,
+    LOAD_STORE_PIF_DATA_ERROR_CAUSE,
+    INSTR_PIF_ADDR_ERROR_CAUSE,
+    LOAD_STORE_PIF_ADDR_ERROR_CAUSE,
+
+    INST_TLB_MISS_CAUSE,
+    INST_TLB_MULTI_HIT_CAUSE,
+    INST_FETCH_PRIVILEGE_CAUSE,
+    INST_FETCH_PROHIBITED_CAUSE = 20,
+    LOAD_STORE_TLB_MISS_CAUSE = 24,
+    LOAD_STORE_TLB_MULTI_HIT_CAUSE,
+    LOAD_STORE_PRIVILEGE_CAUSE,
+    LOAD_PROHIBITED_CAUSE = 28,
+    STORE_PROHIBITED_CAUSE,
+
+    COPROCESSOR0_DISABLED = 32,
 };
 
 typedef struct CPUXtensaState {
@@ -116,6 +191,8 @@ typedef struct CPUXtensaState {
     uint32_t pc;
     uint32_t sregs[256];
     uint32_t uregs[256];
+
+    int exception_taken;
 
     CPU_COMMON
 } CPUXtensaState;
@@ -144,6 +221,15 @@ static inline void cpu_get_tb_cpu_state(CPUState *env, target_ulong *pc,
     *pc = env->pc;
     *cs_base = 0;
     *flags = 0;
+}
+
+static inline int xtensa_get_cintlevel(CPUState *env)
+{
+    int level = (env->sregs[PS] & PS_INTLEVEL) >> PS_INTLEVEL_SHIFT;
+    if ((env->sregs[PS] & PS_EXCM) && EXCMLEVEL > level) {
+        level = EXCMLEVEL;
+    }
+    return level;
 }
 
 #include "cpu-all.h"
