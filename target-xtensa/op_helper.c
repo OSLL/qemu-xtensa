@@ -253,6 +253,17 @@ void HELPER(movsp)(uint32_t pc)
     }
 }
 
+void HELPER(wsr_lend)(uint32_t v)
+{
+    if (env->sregs[LEND] != v) {
+        tb_invalidate_phys_page_range(
+                env->sregs[LEND] - 1, env->sregs[LEND], 0);
+        env->sregs[LEND] = v;
+        tb_invalidate_phys_page_range(
+                env->sregs[LEND] - 1, env->sregs[LEND], 0);
+    }
+}
+
 void HELPER(dump_state)(void)
 {
     cpu_dump_state(env, stderr, fprintf, 0);

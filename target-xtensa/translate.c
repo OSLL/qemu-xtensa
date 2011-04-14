@@ -44,6 +44,7 @@ typedef struct DisasContext {
     const XtensaConfig *config;
     TranslationBlock *tb;
     uint32_t pc;
+    uint32_t lend;
     int is_jmp;
     int singlestep_enabled;
 } DisasContext;
@@ -57,6 +58,9 @@ static TCGv_i32 cpu_UR[256];
 #include "gen-icount.h"
 
 static const char * const sregnames[256] = {
+    [LBEG] = "LBEG",
+    [LEND] = "LEND",
+    [LCOUNT] = "LCOUNT",
     [SAR] = "SAR",
     [SCOMPARE1] = "SCOMPARE1",
     [WINDOW_BASE] = "WINDOW_BASE",
@@ -126,6 +130,11 @@ static void gen_rsr(TCGv_i32 d, int sr)
     }
 }
 
+static void gen_wsr_lend(DisasContext *dc, uint32_t sr, TCGv_i32 v)
+{
+    gen_helper_wsr_lend(v);
+}
+
 static void gen_wsr_windowbase(DisasContext *dc, uint32_t sr, TCGv_i32 v)
 {
     gen_helper_wsr_windowbase(v);
@@ -135,6 +144,7 @@ static void gen_wsr(DisasContext *dc, uint32_t sr, TCGv_i32 s)
 {
     static void (* const wsr_handler[256])(DisasContext *dc,
             uint32_t sr, TCGv_i32 v) = {
+        [LEND] = gen_wsr_lend,
         [WINDOW_BASE] = gen_wsr_windowbase,
     };
 
@@ -212,10 +222,36 @@ static void gen_callw(DisasContext *dc, int _callinc, TCGv_i32 target)
     gen_jump(dc, target);
 }
 
+static void gen_check_loop_end(DisasContext *dc)
+{
+    if (option_enabled(dc, XTENSA_OPTION_LOOP) &&
+            dc->pc == dc->lend) {
+        TCGv_i32 tmp = tcg_temp_new_i32();
+        int label = gen_new_label();
+
+        tcg_gen_andi_i32(tmp, cpu_SR[PS], PS_EXCM);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, tmp, PS_EXCM, label);
+        tcg_gen_brcondi_i32(TCG_COND_NE, cpu_SR[LEND], dc->pc, label);
+        tcg_gen_brcondi_i32(TCG_COND_EQ, cpu_SR[LCOUNT], 0, label);
+        tcg_gen_subi_i32(cpu_SR[LCOUNT], cpu_SR[LCOUNT], 1);
+        gen_jump(dc, cpu_SR[LBEG]);
+        gen_set_label(label);
+        gen_jumpi(dc, dc->pc);
+        tcg_temp_free(tmp);
+    }
+}
+
+static void gen_jumpi_check_loop_end(DisasContext *dc, uint32_t dest)
+{
+    dc->pc = dest;
+    gen_check_loop_end(dc);
+    gen_jumpi(dc, dest);
+}
+
 static void disas_xtensa_insn(DisasContext *dc)
 {
 #define HAS_OPTION(opt) do { \
-        if (!(dc->config->options & (((uint64_t)1) << (opt)))) { \
+        if (!option_enabled(dc, opt)) { \
             goto invalid_opcode; \
         } \
     } while (0)
@@ -1383,7 +1419,7 @@ static void disas_xtensa_insn(DisasContext *dc)
                 }
                 gen_jumpi(dc, dc->pc + 4 + BRI12_IMM12_SE);
                 gen_set_label(label);
-                gen_jumpi(dc, dc->pc + 3);
+                gen_jumpi_check_loop_end(dc, dc->pc + 3);
             }
             break;
 
@@ -1405,7 +1441,7 @@ static void disas_xtensa_insn(DisasContext *dc)
                 }
                 gen_jumpi(dc, dc->pc + 4 + BRI8_IMM8_SE);
                 gen_set_label(label);
-                gen_jumpi(dc, dc->pc + 3);
+                gen_jumpi_check_loop_end(dc, dc->pc + 3);
             }
             break;
 
@@ -1437,15 +1473,29 @@ static void disas_xtensa_insn(DisasContext *dc)
                     break;
 
                 case 8: /*LOOP*/
-                    TBD();
-                    break;
-
                 case 9: /*LOOPNEZ*/
-                    TBD();
-                    break;
-
                 case 10: /*LOOPGTZ*/
-                    TBD();
+                    HAS_OPTION(XTENSA_OPTION_LOOP);
+                    {
+                        uint32_t lend = dc->pc + RRI8_IMM8 + 4;
+                        TCGv_i32 tmp = tcg_const_i32(lend);
+
+                        tcg_gen_subi_i32(cpu_SR[LCOUNT], cpu_R[RRI8_S], 1);
+                        tcg_gen_movi_i32(cpu_SR[LBEG], dc->pc + 3);
+                        gen_wsr_lend(dc, LEND, tmp);
+                        tcg_temp_free(tmp);
+
+                        if (BRI8_R > 8) {
+                            int label = gen_new_label();
+                            tcg_gen_brcondi_i32(
+                                    BRI8_R == 9 ? TCG_COND_NE : TCG_COND_GT,
+                                    cpu_R[RRI8_S], 0, label);
+                            gen_jumpi(dc, lend);
+                            gen_set_label(label);
+                        }
+
+                        gen_jumpi(dc, dc->pc + 3);
+                    }
                     break;
 
                 default: /*reserved*/
@@ -1466,7 +1516,7 @@ static void disas_xtensa_insn(DisasContext *dc)
 
                     gen_jumpi(dc, dc->pc + 4 + BRI8_IMM8_SE);
                     gen_set_label(label);
-                    gen_jumpi(dc, dc->pc + 3);
+                    gen_jumpi_check_loop_end(dc, dc->pc + 3);
                 }
                 break;
             }
@@ -1545,7 +1595,7 @@ static void disas_xtensa_insn(DisasContext *dc)
             }
             gen_jumpi(dc, dc->pc + 4 + RRI8_IMM8_SE);
             gen_set_label(label);
-            gen_jumpi(dc, dc->pc + 3);
+            gen_jumpi_check_loop_end(dc, dc->pc + 3);
         }
         break;
 
@@ -1586,7 +1636,7 @@ static void disas_xtensa_insn(DisasContext *dc)
                     cpu_R[RRRN_S], 0, label);
             gen_jumpi(dc, dc->pc + 4 + (RRRN_R | ((RRRN_T & 3) << 4)));
             gen_set_label(label);
-            gen_jumpi(dc, dc->pc + 2);
+            gen_jumpi_check_loop_end(dc, dc->pc + 2);
         }
         break;
 
@@ -1646,6 +1696,9 @@ static void disas_xtensa_insn(DisasContext *dc)
     } else {
         dc->pc += 3;
     }
+
+    gen_check_loop_end(dc);
+
     return;
 
 invalid_opcode:
@@ -1686,6 +1739,7 @@ static void gen_intermediate_code_internal(
     dc.singlestep_enabled = env->singlestep_enabled;
     dc.tb = tb;
     dc.pc = env->pc;
+    dc.lend = env->sregs[LEND];
     dc.is_jmp = DISAS_NEXT;
 
     gen_icount_start();
