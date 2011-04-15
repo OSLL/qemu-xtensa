@@ -750,7 +750,65 @@ static void disas_xtensa_insn(CPUState *env, DisasContext *dc)
             break;
 
         case 2: /*RST2*/
-            TBD();
+            if (_OP2 >= 12) {
+                HAS_OPTION(XTENSA_OPTION_32_BIT_IDIV);
+                int label = gen_new_label();
+                tcg_gen_brcondi_i32(TCG_COND_NE, cpu_R[RRR_T], 0, label);
+                gen_exception_cause(dc, INTEGER_DIVIE_BY_ZERO_CAUSE);
+                gen_set_label(label);
+            }
+
+            switch (_OP2) {
+            case 8: /*MULLi*/
+                HAS_OPTION(XTENSA_OPTION_32_BIT_IMUL);
+                tcg_gen_mul_i32(cpu_R[RRR_R], cpu_R[RRR_S], cpu_R[RRR_T]);
+                break;
+
+            case 10: /*MULUHi*/
+            case 11: /*MULSHi*/
+                HAS_OPTION(XTENSA_OPTION_32_BIT_IMUL);
+                {
+                    TCGv_i64 r = tcg_temp_new_i64();
+                    TCGv_i64 s = tcg_temp_new_i64();
+                    TCGv_i64 t = tcg_temp_new_i64();
+
+                    if (_OP2 == 10) {
+                        tcg_gen_extu_i32_i64(s, cpu_R[RRR_S]);
+                        tcg_gen_extu_i32_i64(t, cpu_R[RRR_T]);
+                    } else {
+                        tcg_gen_ext_i32_i64(s, cpu_R[RRR_S]);
+                        tcg_gen_ext_i32_i64(t, cpu_R[RRR_T]);
+                    }
+                    tcg_gen_mul_i64(r, s, t);
+                    tcg_gen_shri_i64(r, r, 32);
+                    tcg_gen_trunc_i64_i32(cpu_R[RRR_R], r);
+
+                    tcg_temp_free_i64(r);
+                    tcg_temp_free_i64(s);
+                    tcg_temp_free_i64(t);
+                }
+                break;
+
+            case 12: /*QUOUi*/
+                tcg_gen_divu_i32(cpu_R[RRR_R], cpu_R[RRR_S], cpu_R[RRR_T]);
+                break;
+
+            case 13: /*QUOSi*/
+                tcg_gen_div_i32(cpu_R[RRR_R], cpu_R[RRR_S], cpu_R[RRR_T]);
+                break;
+
+            case 14: /*REMUi*/
+                tcg_gen_remu_i32(cpu_R[RRR_R], cpu_R[RRR_S], cpu_R[RRR_T]);
+                break;
+
+            case 15: /*REMSi*/
+                tcg_gen_rem_i32(cpu_R[RRR_R], cpu_R[RRR_S], cpu_R[RRR_T]);
+                break;
+
+            default: /*reserved*/
+                RESERVED();
+                break;
+            }
             break;
 
         case 3: /*RST3*/
