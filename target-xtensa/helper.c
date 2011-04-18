@@ -36,6 +36,7 @@
 
 void cpu_reset(CPUXtensaState *env)
 {
+    env->exception_taken = 0;
     env->pc = 0;
     env->sregs[PS] = 0x1f;
 }
@@ -79,6 +80,9 @@ void do_interrupt(CPUState *env)
         [EXC_WINDOW_UNDERFLOW8] = WINDOW_UNDERFLOW8,
         [EXC_WINDOW_OVERFLOW12] = WINDOW_OVERFLOW12,
         [EXC_WINDOW_UNDERFLOW12] = WINDOW_UNDERFLOW12,
+        [EXC_KERNEL] = KERNEL_EXCEPTION_VECTOR,
+        [EXC_USER] = USER_EXCEPTION_VECTOR,
+        [EXC_DOUBLE] = DOUBLE_EXCEPTION_VECTOR,
     };
 
     switch (env->exception_index) {
@@ -88,7 +92,11 @@ void do_interrupt(CPUState *env)
     case EXC_WINDOW_UNDERFLOW8:
     case EXC_WINDOW_OVERFLOW12:
     case EXC_WINDOW_UNDERFLOW12:
+    case EXC_KERNEL:
+    case EXC_USER:
+    case EXC_DOUBLE:
         env->pc = vector[env->exception_index];
+        env->exception_taken = 1;
         break;
 
     }

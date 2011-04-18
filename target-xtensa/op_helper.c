@@ -56,3 +56,27 @@ void HELPER(exception)(uint32_t excp)
     env->exception_index = excp;
     cpu_loop_exit();
 }
+
+void HELPER(exception_cause)(uint32_t pc, uint32_t cause)
+{
+    uint32_t vector;
+
+    env->sregs[EPC1] = env->pc = pc;
+    env->sregs[EXCCAUSE] = cause;
+
+    if (env->sregs[PS] & PS_EXCM) {
+        vector = EXC_DOUBLE;
+    } else {
+        vector = (env->sregs[PS] & PS_UM) ? EXC_USER : EXC_KERNEL;
+    }
+
+    env->sregs[PS] |= PS_EXCM;
+
+    HELPER(exception)(vector);
+}
+
+void HELPER(exception_cause_vaddr)(uint32_t pc, uint32_t cause, uint32_t vaddr)
+{
+    env->sregs[EXCVADDR] = vaddr;
+    HELPER(exception_cause)(pc, cause);
+}
