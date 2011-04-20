@@ -110,6 +110,7 @@ enum {
     LEND = 1,
     LCOUNT = 2,
     SAR = 3,
+    LITBASE = 5,
     SCOMPARE1 = 12,
     WINDOW_BASE = 72,
     WINDOW_START = 73,

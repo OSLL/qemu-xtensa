@@ -62,6 +62,7 @@ static const char * const sregnames[256] = {
     [LEND] = "LEND",
     [LCOUNT] = "LCOUNT",
     [SAR] = "SAR",
+    [LITBASE] = "LITBASE",
     [SCOMPARE1] = "SCOMPARE1",
     [WINDOW_BASE] = "WINDOW_BASE",
     [WINDOW_START] = "WINDOW_START",
@@ -1168,12 +1169,25 @@ static void disas_xtensa_insn(DisasContext *dc)
 
     case 1: /*L32R*/
         {
-            TCGv_i32 tmp = tcg_const_i32(
+            TCGv_i32 tmp = tcg_temp_local_new_i32();
+
+            tcg_gen_movi_i32(tmp,
                     (0xfffc0000 | (RI16_IMM16 << 2)) +
                     ((dc->pc + 3) & ~3));
 
-            /* no ext L32R */
+            if (option_enabled(dc, XTENSA_OPTION_EXTENDED_L32R)) {
+                TCGv_i32 tmp1 = tcg_temp_new_i32();
+                int label = gen_new_label();
 
+                tcg_gen_andi_i32(tmp1, cpu_SR[LITBASE], 1);
+                tcg_gen_brcondi_i32(TCG_COND_EQ, tmp1, 0, label);
+                tcg_gen_andi_i32(tmp1, cpu_SR[LITBASE], 0xfffff000);
+                tcg_gen_addi_i32(tmp, tmp1, (0xfffc0000 | (RI16_IMM16 << 2)));
+                gen_set_label(label);
+                tcg_temp_free(tmp1);
+            }
+
+            /* much simplified, no MMU */
             tcg_gen_qemu_ld32u(cpu_R[RRR_T], tmp, 0);
             tcg_temp_free(tmp);
         }
