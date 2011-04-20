@@ -566,7 +566,7 @@ static void disas_xtensa_insn(DisasContext *dc)
                         break;
 
                     case 1: /*SIMCALL*/
-                        TBD();
+                        gen_helper_simcall();
                         break;
 
                     default:

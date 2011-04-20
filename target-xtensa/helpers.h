@@ -11,6 +11,7 @@ DEF_HELPER_2(window_check, void, i32, i32)
 DEF_HELPER_0(restore_owb, void)
 DEF_HELPER_1(movsp, void, i32)
 DEF_HELPER_1(wsr_lend, void, i32)
+DEF_HELPER_0(simcall, void)
 DEF_HELPER_0(dump_state, void)
 
 #include "def-helper.h"
