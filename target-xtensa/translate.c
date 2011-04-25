@@ -1526,7 +1526,45 @@ static void disas_xtensa_insn(DisasContext *dc)
 
         case 8: /*LSCXp*/
             HAS_OPTION(XTENSA_OPTION_COPROCESSOR);
-            TBD();
+            {
+                switch (_OP2) {
+                case 0: /*LSXf*/
+                    TBD();
+                    break;
+
+                case 1: /*LSXUf*/
+                    TBD();
+                    break;
+
+                case 4: /*SSXf*/
+                    TBD();
+                    break;
+
+                case 5: /*SSXUf*/
+                    TBD();
+                    break;
+
+                case 8: /*reserved*/
+                    switch (RRR_T) {
+                    case 2: /*PUSH32*/
+                        TBD();
+                        break;
+
+                    case 3: /*POP32*/
+                        TBD();
+                        break;
+
+                    default: /*reserved*/
+                        RESERVED();
+                        break;
+                    }
+                    break;
+
+                default: /*reserved*/
+                    RESERVED();
+                    break;
+                }
+            }
             break;
 
         case 9: /*LSC4*/
