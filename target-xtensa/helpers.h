@@ -28,4 +28,7 @@ DEF_HELPER_2(itlb, void, i32, i32)
 DEF_HELPER_2(ptlb, i32, i32, i32)
 DEF_HELPER_3(wtlb, void, i32, i32, i32)
 
+DEF_HELPER_2(push32, void, i32, i32)
+DEF_HELPER_2(pop32, void, i32, i32)
+
 #include "def-helper.h"

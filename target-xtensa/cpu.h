@@ -276,6 +276,9 @@ typedef struct CPUXtensaState {
     const XtensaConfig *config;
     int argc;
     char **argv;
+    const char *tieports;
+    FILE *in_queue[16];
+    FILE *out_queue[16];
     uint32_t regs[16];
     uint32_t pc;
     uint32_t sregs[256];

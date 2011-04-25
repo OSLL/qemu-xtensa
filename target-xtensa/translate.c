@@ -1547,11 +1547,38 @@ static void disas_xtensa_insn(DisasContext *dc)
                 case 8: /*reserved*/
                     switch (RRR_T) {
                     case 2: /*PUSH32*/
-                        TBD();
+                        gen_window_check1(dc, RRR_S);
+                        {
+                            TCGv_i32 r = tcg_const_i32(RRR_R);
+                            TCGv_i32 s = tcg_const_i32(RRR_S);
+                            gen_helper_push32(r, s);
+                            tcg_temp_free(r);
+                            tcg_temp_free(s);
+                        }
                         break;
 
                     case 3: /*POP32*/
-                        TBD();
+                        gen_window_check1(dc, RRR_R);
+                        {
+                            static const uint32_t queue_index[] = {
+                                [6] = 0,
+                                [7] = 1,
+                                [9] = 2,
+                                [10] = 3,
+                                [12] = 4,
+                                [11] = 5,
+                                [13] = 6,
+                                [14] = 7,
+                                [15] = 8,
+                                [0] = 9,
+                            };
+
+                            TCGv_i32 r = tcg_const_i32(RRR_R);
+                            TCGv_i32 s = tcg_const_i32(queue_index[RRR_S]);
+                            gen_helper_pop32(r, s);
+                            tcg_temp_free(r);
+                            tcg_temp_free(s);
+                        }
                         break;
 
                     default: /*reserved*/

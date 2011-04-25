@@ -64,6 +64,7 @@ static void xtensa_init(ram_addr_t ram_size,
         qemu_register_reset(xtensa_sample_reset, env);
         env->sregs[PRID] = n;
 
+        env->tieports = "ports.conf";
         if (get_executable_image_args(n, &elf_filename, &env->argc,
                     &env->argv)) {
             uint64_t elf_entry;

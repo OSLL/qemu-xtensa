@@ -657,3 +657,66 @@ void HELPER(wtlb)(uint32_t p, uint32_t v, uint32_t dtlb)
     split_tlb_entry_spec(v, dtlb, &vpn, &wi, &ei);
     xtensa_tlb_set_entry(env, dtlb, wi, ei, vpn, p);
 }
+
+static FILE *open_queue(CPUState *env, uint32_t q, bool in)
+{
+    FILE *queue = NULL;
+    qemu_log("%s: %s%d_32\n", __func__, in ? "INQ" : "OUTQ", q);
+    if (env->tieports) {
+        FILE *tieports = fopen(env->tieports, "rt");
+        if (tieports) {
+            char line[1024];
+
+            while (fgets(line, sizeof(line), tieports)) {
+                char name[1024];
+                int port;
+                /* enforce space between {IN,OUT}Q%d_32 and the file name
+                 * allow space in the file name itself
+                 */
+                if (2 == sscanf(line,
+                            in ?
+                            "INQ%d_32%*[ \t]%[^\n]" :
+                            "OUTQ%d_32%*[ \t]%[^\n]",
+                            &port, name) && port == q) {
+                    qemu_log("%s: %s%d_32 -> '%s'\n",
+                            __func__, in ? "INQ" : "OUTQ", port, name);
+                    queue = fopen(name, in ? "r" : "w");
+                    break;
+                }
+            }
+            fclose(tieports);
+        } else {
+            qemu_log("%s: unable to open tieports file %s\n",
+                    __func__, env->tieports);
+        }
+    }
+    if (!queue) {
+        qemu_log("%s: could not open fifo file for %s%d_32\n",
+                __func__, in ? "INQ" : "OUTQ", q);
+    }
+    return queue;
+}
+
+void HELPER(push32)(uint32_t q, uint32_t r)
+{
+    int rc;
+    if (!env->out_queue[q]) {
+        env->out_queue[q] = open_queue(env, q, false);
+    }
+    assert(env->out_queue[q]);
+    rc = fprintf(env->out_queue[q], "0x%08x\n", env->regs[r]);
+    assert(rc == 11);
+    fflush(env->out_queue[q]);
+}
+
+void HELPER(pop32)(uint32_t r, uint32_t q)
+{
+    int rc;
+    if (!env->in_queue[q]) {
+        env->in_queue[q] = open_queue(env, q, true);
+    }
+    assert(env->in_queue[q]);
+    while ((rc = fscanf(env->in_queue[q], "%i", env->regs + r)) != 1) {
+    }
+    assert(rc == 1);
+}
