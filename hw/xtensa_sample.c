@@ -18,6 +18,7 @@ static void xtensa_init(ram_addr_t ram_size,
             fprintf(stderr, "Unable to find CPU definition\n");
             exit(1);
         }
+        env->sregs[PRID] = n;
     }
 
     ram_offset = qemu_ram_alloc(NULL, "xtensa.dram", 0x10000);
