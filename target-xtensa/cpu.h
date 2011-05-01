@@ -99,12 +99,18 @@ enum {
     XTENSA_OPTIN_TRACE_PORT,
 };
 
+enum {
+    THREADPTR = 231,
+    FCR = 232,
+    FSR = 233,
+};
 
 typedef struct CPUXtensaState {
     uint64_t options;
     uint32_t regs[16];
     uint32_t pc;
     uint32_t sregs[256];
+    uint32_t uregs[256];
 
     CPU_COMMON
 } CPUXtensaState;
