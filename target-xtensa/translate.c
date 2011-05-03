@@ -67,11 +67,36 @@ static const char * const sregnames[256] = {
     [WINDOW_BASE] = "WINDOW_BASE",
     [WINDOW_START] = "WINDOW_START",
     [EPC1] = "EPC1",
+    [EPC1 + 1] = "EPC2",
+    [EPC1 + 2] = "EPC3",
+    [EPC1 + 3] = "EPC4",
+    [EPC1 + 4] = "EPC5",
+    [EPC1 + 5] = "EPC6",
+    [EPC1 + 6] = "EPC7",
     [DEPC] = "DEPC",
+    [EPS2] = "EPS2",
+    [EPS2 + 1] = "EPS3",
+    [EPS2 + 2] = "EPS4",
+    [EPS2 + 3] = "EPS5",
+    [EPS2 + 4] = "EPS6",
+    [EPS2 + 5] = "EPS7",
     [EXCSAVE1] = "EXCSAVE1",
+    [EXCSAVE1 + 1] = "EXCSAVE2",
+    [EXCSAVE1 + 2] = "EXCSAVE3",
+    [EXCSAVE1 + 3] = "EXCSAVE4",
+    [EXCSAVE1 + 4] = "EXCSAVE5",
+    [EXCSAVE1 + 5] = "EXCSAVE6",
+    [EXCSAVE1 + 6] = "EXCSAVE7",
+    [INTSET] = "INTSET",
+    [INTCLEAR] = "INTCLEAR",
+    [INTENABLE] = "INTENABLE",
     [PS] = "PS",
     [EXCCAUSE] = "EXCCAUSE",
+    [CCOUNT] = "CCOUNT",
     [EXCVADDR] = "EXCVADDR",
+    [CCOMPARE] = "CCOMPARE0",
+    [CCOMPARE + 1] = "CCOMPARE1",
+    [CCOMPARE + 2] = "CCOMPARE2",
 };
 
 static const char * const uregnames[256] = {
@@ -122,6 +147,12 @@ static inline int option_enabled(DisasContext *dc, int opt)
     return xtensa_option_enabled(dc->config, opt);
 }
 
+static void gen_check_interrupts(DisasContext *dc)
+{
+    tcg_gen_movi_i32(cpu_pc, dc->pc);
+    gen_helper_check_interrupts();
+}
+
 static void gen_rsr(TCGv_i32 d, int sr)
 {
     if (sregnames[sr]) {
@@ -141,12 +172,32 @@ static void gen_wsr_windowbase(DisasContext *dc, uint32_t sr, TCGv_i32 v)
     gen_helper_wsr_windowbase(v);
 }
 
+static void gen_wsr_ps(DisasContext *dc, uint32_t sr, TCGv_i32 v)
+{
+    tcg_gen_mov_i32(cpu_SR[sr], v);
+    gen_check_interrupts(dc);
+}
+
+static void gen_wsr_ccompare(DisasContext *dc, uint32_t sr, TCGv_i32 v)
+{
+    TCGv_i32 id = tcg_const_i32(sr - CCOMPARE);
+    TCGv_i32 active = tcg_const_i32(0);
+    tcg_gen_mov_i32(cpu_SR[sr], v);
+    gen_helper_timer_irq(id, active);
+    tcg_temp_free(id);
+    tcg_temp_free(active);
+}
+
 static void gen_wsr(DisasContext *dc, uint32_t sr, TCGv_i32 s)
 {
     static void (* const wsr_handler[256])(DisasContext *dc,
             uint32_t sr, TCGv_i32 v) = {
         [LEND] = gen_wsr_lend,
         [WINDOW_BASE] = gen_wsr_windowbase,
+        [PS] = gen_wsr_ps,
+        [CCOMPARE] = gen_wsr_ccompare,
+        [CCOMPARE + 1] = gen_wsr_ccompare,
+        [CCOMPARE + 2] = gen_wsr_ccompare,
     };
 
     if (sregnames[sr]) {
@@ -271,6 +322,15 @@ static void gen_load_store_alignment(DisasContext *dc, int shift, TCGv_i32 addr)
         gen_set_label(label);
     }
     tcg_temp_free(tmp);
+}
+
+static void gen_waiti(DisasContext *dc, uint32_t imm4)
+{
+    TCGv_i32 pc = tcg_const_i32(dc->pc);
+    TCGv_i32 intlevel = tcg_const_i32(imm4);
+    gen_helper_waiti(pc, intlevel);
+    tcg_temp_free(pc);
+    tcg_temp_free(intlevel);
 }
 
 static void disas_xtensa_insn(DisasContext *dc)
@@ -539,7 +599,9 @@ static void disas_xtensa_insn(DisasContext *dc)
 
                     case 1: /*RFIx*/
                         HAS_OPTION(XTENSA_OPTION_HIGH_PRIORITY_INTERRUPT);
-                        TBD();
+                        gen_check_privilege(dc);
+                        tcg_gen_mov_i32(cpu_SR[PS], cpu_SR[EPS2 + RRR_S - 2]);
+                        gen_jump(dc, cpu_SR[EPC1 + RRR_S - 1]);
                         break;
 
                     case 2: /*RFME*/
@@ -582,11 +644,13 @@ static void disas_xtensa_insn(DisasContext *dc)
                     tcg_gen_ori_i32(cpu_SR[PS], cpu_SR[PS], RRR_S);
                     tcg_gen_andi_i32(cpu_SR[PS], cpu_SR[PS],
                             RRR_S | ~PS_INTLEVEL);
+                    gen_check_interrupts(dc);
                     break;
 
                 case 7: /*WAITIx*/
                     HAS_OPTION(XTENSA_OPTION_INTERRUPT);
-                    TBD();
+                    gen_check_privilege(dc);
+                    gen_waiti(dc, RRR_S);
                     break;
 
                 case 8: /*ANY4p*/
@@ -1765,6 +1829,26 @@ static void check_breakpoint(CPUState *env, DisasContext *dc)
     }
 }
 
+static void gen_timer(CPUState *env, DisasContext *dc)
+{
+    int id;
+    tcg_gen_addi_i32(cpu_SR[CCOUNT], cpu_SR[CCOUNT], 1);
+    for (id = 0; id < env->config->nccompare; ++id) {
+        int label = gen_new_label();
+        tcg_gen_brcond_i32(
+                TCG_COND_NE, cpu_SR[CCOUNT], cpu_SR[CCOMPARE + id], label);
+        {
+            TCGv_i32 tid = tcg_const_i32(id);
+            TCGv_i32 active = tcg_const_i32(1);
+            tcg_gen_movi_i32(cpu_pc, dc->pc);
+            gen_helper_timer_irq(tid, active);
+            tcg_temp_free(tid);
+            tcg_temp_free(active);
+        }
+        gen_set_label(label);
+    }
+}
+
 static void gen_intermediate_code_internal(
         CPUState *env, TranslationBlock *tb, int search_pc)
 {
@@ -1813,6 +1897,12 @@ static void gen_intermediate_code_internal(
             tcg_gen_debug_insn_start(dc.pc);
         }
 
+        gen_timer(env, &dc);
+
+        if (insn_count + 1 == max_insns && (tb->cflags & CF_LAST_IO)) {
+            gen_io_start();
+        }
+
         disas_xtensa_insn(&dc);
         ++insn_count;
         if (env->singlestep_enabled) {
@@ -1823,6 +1913,10 @@ static void gen_intermediate_code_internal(
     } while (dc.is_jmp == DISAS_NEXT &&
             insn_count < max_insns &&
             gen_opc_ptr < gen_opc_end);
+
+    if (tb->cflags & CF_LAST_IO) {
+        gen_io_end();
+    }
 
     if (dc.is_jmp == DISAS_NEXT) {
         tcg_gen_movi_i32(cpu_pc, dc.pc);

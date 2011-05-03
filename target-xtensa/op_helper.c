@@ -27,6 +27,7 @@
 
 #include "exec.h"
 #include "helpers.h"
+#include "hw/irq.h"
 
 #define MMUSUFFIX _mmu
 
@@ -274,4 +275,21 @@ void HELPER(simcall)(void)
 void HELPER(dump_state)(void)
 {
     cpu_dump_state(env, stderr, fprintf, 0);
+}
+
+void HELPER(check_interrupts)(void)
+{
+    check_interrupts(env);
+}
+
+void HELPER(waiti)(uint32_t pc, uint32_t intlevel)
+{
+    env->sregs[PS] = (env->sregs[PS] & ~PS_INTLEVEL) |
+        (intlevel << PS_INTLEVEL_SHIFT);
+    check_interrupts(env);
+}
+
+void HELPER(timer_irq)(uint32_t id, uint32_t active)
+{
+    qemu_set_irq(env->irq_inputs[env->config->timerint[id]], active);
 }
