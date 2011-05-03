@@ -40,6 +40,7 @@ void cpu_reset(CPUXtensaState *env)
     env->pc = env->config->exception_vector[EXC_RESET];
     env->sregs[LITBASE] &= ~1;
     env->sregs[PS] = 0x1f;
+    env->sregs[VECBASE] = env->config->vecbase;
 
     env->pending_irq_level = 0;
 }
@@ -51,6 +52,7 @@ static const XtensaConfig core_config[] = {
         .nareg = 64,
         .ndepc = 1,
         .excm_level = 16,
+        .vecbase = 0x5fff8400,
         .exception_vector = {
             [EXC_RESET] = 0x5fff8000,
             [EXC_WINDOW_OVERFLOW4] = 0x5fff8400,
@@ -137,6 +139,16 @@ target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
     return addr;
 }
 
+static uint32_t relocated_vector(CPUState *env, uint32_t vector)
+{
+    if (xtensa_option_enabled(env->config,
+                XTENSA_OPTION_RELOCATABLE_VECTOR)) {
+        return vector - env->config->vecbase + env->sregs[VECBASE];
+    } else {
+        return vector;
+    }
+}
+
 static int handle_interrupt(CPUState *env)
 {
     int handled = 1;
@@ -150,7 +162,8 @@ static int handle_interrupt(CPUState *env)
         if (level > 1) {
             env->sregs[EPC1 + level - 1] = env->pc;
             env->sregs[EPS2 + level - 2] = env->sregs[PS];
-            env->pc = env->config->interrupt_vector[level];
+            env->pc = relocated_vector(env,
+                    env->config->interrupt_vector[level]);
         } else {
             handled = 0;
             env->sregs[EXCCAUSE] = LEVEL1_INTERRUPT_CAUSE;
@@ -196,7 +209,8 @@ void do_interrupt(CPUState *env)
     case EXC_USER:
     case EXC_DOUBLE:
         if (env->config->exception_vector[env->exception_index]) {
-            env->pc = env->config->exception_vector[env->exception_index];
+            env->pc = relocated_vector(env,
+                    env->config->exception_vector[env->exception_index]);
             env->exception_taken = 1;
             env->interrupt_request |= CPU_INTERRUPT_EXITTB;
         } else {
