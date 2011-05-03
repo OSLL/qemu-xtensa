@@ -85,3 +85,175 @@ void HELPER(exception_cause_vaddr)(uint32_t pc, uint32_t cause, uint32_t vaddr)
     env->sregs[EXCVADDR] = vaddr;
     HELPER(exception_cause)(pc, cause);
 }
+
+static void copy_window_from_phys(uint32_t window, uint32_t phys, uint32_t n)
+{
+    assert(phys < env->config->nareg);
+    if (phys + n <= env->config->nareg) {
+        memcpy(env->regs + window, env->phys_regs + phys,
+                n * sizeof(uint32_t));
+    } else {
+        uint32_t n1 = env->config->nareg - phys;
+        memcpy(env->regs + window, env->phys_regs + phys,
+                n1 * sizeof(uint32_t));
+        memcpy(env->regs + window + n1, env->phys_regs,
+                (n - n1) * sizeof(uint32_t));
+    }
+}
+
+static void copy_phys_from_window(uint32_t phys, uint32_t window, uint32_t n)
+{
+    assert(phys < env->config->nareg);
+    if (phys + n <= env->config->nareg) {
+        memcpy(env->phys_regs + phys, env->regs + window,
+                n * sizeof(uint32_t));
+    } else {
+        uint32_t n1 = env->config->nareg - phys;
+        memcpy(env->phys_regs + phys, env->regs + window,
+                n1 * sizeof(uint32_t));
+        memcpy(env->phys_regs, env->regs + window + n1,
+                (n - n1) * sizeof(uint32_t));
+    }
+}
+
+
+#define WINDOWBASE_BOUND(a) ((a) & (env->config->nareg / 4 - 1))
+#define WINDOW_BOUND(a) ((a) & (env->config->nareg - 1))
+#define WINDOWSTART_BIT(a) (1 << WINDOWBASE_BOUND(a))
+
+static void rotate_window_abs(uint32_t position)
+{
+    copy_phys_from_window(env->sregs[WINDOW_BASE] * 4, 0, 16);
+    env->sregs[WINDOW_BASE] = WINDOWBASE_BOUND(position);
+    copy_window_from_phys(0, env->sregs[WINDOW_BASE] * 4, 16);
+}
+
+static void rotate_window(uint32_t delta)
+{
+    rotate_window_abs(env->sregs[WINDOW_BASE] + delta);
+}
+
+void HELPER(wsr_windowbase)(uint32_t v)
+{
+    rotate_window_abs(v);
+}
+
+void HELPER(entry)(uint32_t pc, uint32_t s, uint32_t imm)
+{
+    int callinc = (env->sregs[PS] & PS_CALLINC) >> PS_CALLINC_SHIFT;
+    if (s > 3 || ((env->sregs[PS] & (PS_WOE | PS_EXCM)) ^ PS_WOE) != 0) {
+        printf("Illegal entry instruction (%08x), PS = %08x\n",
+                pc, env->sregs[PS]);
+        HELPER(exception_cause)(pc, ILLEGAL_INSTRUCTION_CAUSE);
+    } else {
+        env->regs[(callinc << 2) | (s & 3)] = env->regs[s] - (imm << 3);
+        rotate_window(callinc);
+        env->sregs[WINDOW_START] |= WINDOWSTART_BIT(env->sregs[WINDOW_BASE]);
+    }
+}
+
+void HELPER(window_check)(uint32_t pc, uint32_t w)
+{
+    uint32_t windowbase = WINDOWBASE_BOUND(env->sregs[WINDOW_BASE]);
+    uint32_t windowstart = env->sregs[WINDOW_START];
+    uint32_t m, n;
+
+    if ((env->sregs[PS] & (PS_WOE | PS_EXCM)) ^ PS_WOE) {
+        return;
+    }
+
+    for (n = 1; n <= w; ++n)
+        if (windowstart & WINDOWSTART_BIT(windowbase + n)) {
+            break;
+        }
+
+    if (n > w) {
+        return;
+    }
+
+    m = WINDOWBASE_BOUND(windowbase + n);
+    rotate_window(n);
+    env->sregs[PS] = (env->sregs[PS] & ~PS_OWB) |
+        (windowbase << PS_OWB_SHIFT) | PS_EXCM;
+    env->sregs[EPC1] = env->pc = pc;
+
+    if (windowstart & WINDOWSTART_BIT(m + 1)) {
+        HELPER(exception)(EXC_WINDOW_OVERFLOW4);
+    } else if (windowstart & WINDOWSTART_BIT(m + 2)) {
+        HELPER(exception)(EXC_WINDOW_OVERFLOW8);
+    } else {
+        HELPER(exception)(EXC_WINDOW_OVERFLOW12);
+    }
+}
+
+uint32_t HELPER(retw)(uint32_t pc)
+{
+    int n = (env->regs[0] >> 30) & 0x3;
+    int m = 0;
+    uint32_t windowbase = WINDOWBASE_BOUND(env->sregs[WINDOW_BASE]);
+    uint32_t windowstart = env->sregs[WINDOW_START];
+    uint32_t ret_pc = 0;
+
+    if (windowstart & WINDOWSTART_BIT(windowbase - 1)) {
+        m = 1;
+    } else if (windowstart & WINDOWSTART_BIT(windowbase - 2)) {
+        m = 2;
+    } else if (windowstart & WINDOWSTART_BIT(windowbase - 3)) {
+        m = 3;
+    }
+
+    if (n == 0 || (m != 0 && m != n) ||
+            ((env->sregs[PS] & (PS_WOE | PS_EXCM)) ^ PS_WOE) != 0) {
+        printf("Illegal retw instruction (%08x), PS = %08x, m = %d, n = %d\n",
+                pc, env->sregs[PS], m, n);
+        HELPER(exception_cause)(pc, ILLEGAL_INSTRUCTION_CAUSE);
+    } else {
+        int owb = windowbase;
+
+        ret_pc = (pc & 0xc0000000) | (env->regs[0] & 0x3fffffff);
+
+        rotate_window(-n);
+        if (windowstart & WINDOWSTART_BIT(env->sregs[WINDOW_BASE])) {
+            env->sregs[WINDOW_START] &= ~WINDOWSTART_BIT(owb);
+        } else {
+            /* window underflow */
+            env->sregs[PS] = (env->sregs[PS] & ~PS_OWB) |
+                (windowbase << PS_OWB_SHIFT) | PS_EXCM;
+            env->sregs[EPC1] = env->pc = pc;
+
+            if (n == 1) {
+                HELPER(exception)(EXC_WINDOW_UNDERFLOW4);
+            } else if (n == 2) {
+                HELPER(exception)(EXC_WINDOW_UNDERFLOW8);
+            } else if (n == 3) {
+                HELPER(exception)(EXC_WINDOW_UNDERFLOW12);
+            }
+        }
+    }
+    return ret_pc;
+}
+
+void HELPER(rotw)(uint32_t imm4)
+{
+    rotate_window(imm4);
+}
+
+void HELPER(restore_owb)(void)
+{
+    rotate_window_abs((env->sregs[PS] & PS_OWB) >> PS_OWB_SHIFT);
+}
+
+void HELPER(movsp)(uint32_t pc)
+{
+    if ((env->sregs[WINDOW_START] &
+            (WINDOWSTART_BIT(env->sregs[WINDOW_BASE] - 3) |
+             WINDOWSTART_BIT(env->sregs[WINDOW_BASE] - 2) |
+             WINDOWSTART_BIT(env->sregs[WINDOW_BASE] - 1))) == 0) {
+        HELPER(exception_cause)(pc, ALLOCA_CAUSE);
+    }
+}
+
+void HELPER(dump_state)(void)
+{
+    cpu_dump_state(env, stderr, fprintf, 0);
+}

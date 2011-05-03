@@ -108,6 +108,8 @@ enum {
 enum {
     SAR = 3,
     SCOMPARE1 = 12,
+    WINDOW_BASE = 72,
+    WINDOW_START = 73,
     EPC1 = 177,
     DEPC = 192,
     EXCSAVE1 = 209,
@@ -133,6 +135,8 @@ enum {
 #define PS_CALLINC_LEN 2
 
 #define PS_WOE 0x40000
+
+#define MAX_NAREG 64
 
 enum {
     /* Static vectors */
@@ -185,6 +189,7 @@ enum {
 typedef struct XtensaConfig {
     const char *name;
     uint64_t options;
+    unsigned nareg;
     int excm_level;
     int ndepc;
     uint32_t exception_vector[EXC_MAX];
@@ -196,6 +201,7 @@ typedef struct CPUXtensaState {
     uint32_t pc;
     uint32_t sregs[256];
     uint32_t uregs[256];
+    uint32_t phys_regs[MAX_NAREG];
 
     int exception_taken;
 
