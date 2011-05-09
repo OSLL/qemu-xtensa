@@ -47,6 +47,7 @@ typedef struct DisasContext {
     uint32_t next_pc;
     int mem_idx;
     uint32_t lend;
+    uint32_t litbase;
     int is_jmp;
     int singlestep_enabled;
 
@@ -69,6 +70,7 @@ static const char * const sregnames[256] = {
     [LEND] = "LEND",
     [LCOUNT] = "LCOUNT",
     [SAR] = "SAR",
+    [LITBASE] = "LITBASE",
     [SCOMPARE1] = "SCOMPARE1",
     [WINDOW_BASE] = "WINDOW_BASE",
     [WINDOW_START] = "WINDOW_START",
@@ -314,6 +316,13 @@ static void gen_wsr_sar(DisasContext *dc, uint32_t sr, TCGv_i32 s)
     dc->sar_m32_5bit = false;
 }
 
+static void gen_wsr_litbase(DisasContext *dc, uint32_t sr, TCGv_i32 s)
+{
+    tcg_gen_mov_i32(cpu_SR[sr], s);
+    /* This can change tb->flags, so exit tb */
+    gen_jumpi_check_loop_end(dc, -1);
+}
+
 static void gen_wsr_windowbase(DisasContext *dc, uint32_t sr, TCGv_i32 v)
 {
     gen_helper_wsr_windowbase(v);
@@ -325,6 +334,7 @@ static void gen_wsr(DisasContext *dc, uint32_t sr, TCGv_i32 s)
             uint32_t sr, TCGv_i32 v) = {
         [LEND] = gen_wsr_lend,
         [SAR] = gen_wsr_sar,
+        [LITBASE] = gen_wsr_litbase,
         [WINDOW_BASE] = gen_wsr_windowbase,
     };
 
@@ -1250,10 +1260,10 @@ static void disas_xtensa_insn(DisasContext *dc)
     case 1: /*L32R*/
         {
             TCGv_i32 tmp = tcg_const_i32(
-                    (0xfffc0000 | (RI16_IMM16 << 2)) +
-                    ((dc->pc + 3) & ~3));
-
-            /* no ext L32R */
+                    ((dc->tb->flags & XTENSA_TBFLAG_LITBASE) ?
+                     dc->litbase :
+                     ((dc->pc + 3) & ~3)) +
+                    (0xfffc0000 | (RI16_IMM16 << 2)));
 
             tcg_gen_qemu_ld32u(cpu_R[RRR_T], tmp, 0);
             tcg_temp_free(tmp);
@@ -1780,6 +1790,7 @@ static void gen_intermediate_code_internal(
     dc.pc = env->pc;
     dc.mem_idx = cpu_mmu_index(env);
     dc.lend = env->sregs[LEND];
+    dc.litbase = env->sregs[LITBASE] & 0xfffff000;
     dc.is_jmp = DISAS_NEXT;
 
     reset_sar_tracker(&dc);
