@@ -177,6 +177,16 @@ static void gen_exception_cause(DisasContext *dc, uint32_t cause)
     tcg_temp_free(_cause);
 }
 
+static void gen_exception_cause_vaddr(DisasContext *dc, uint32_t cause,
+        TCGv_i32 vaddr)
+{
+    TCGv_i32 _pc = tcg_const_i32(dc->pc);
+    TCGv_i32 _cause = tcg_const_i32(cause);
+    gen_helper_exception_cause_vaddr(_pc, _cause, vaddr);
+    tcg_temp_free(_pc);
+    tcg_temp_free(_cause);
+}
+
 static void gen_check_privilege(DisasContext *dc)
 {
     if (dc->mem_idx) {
@@ -347,6 +357,20 @@ static void gen_wsr(DisasContext *dc, uint32_t sr, TCGv_i32 s)
     } else {
         qemu_log("WSR %d not implemented, ", sr);
     }
+}
+
+static void gen_load_store_alignment(DisasContext *dc, int shift, TCGv_i32 addr)
+{
+    TCGv_i32 tmp = tcg_temp_local_new_i32();
+    tcg_gen_mov_i32(tmp, addr);
+    tcg_gen_andi_i32(addr, addr, ~0 << shift);
+    if (option_enabled(dc, XTENSA_OPTION_UNALIGNED_EXCEPTION)) {
+        int label = gen_new_label();
+        tcg_gen_brcond_i32(TCG_COND_EQ, addr, tmp, label);
+        gen_exception_cause_vaddr(dc, LOAD_STORE_ALIGNMENT_CAUSE, tmp);
+        gen_set_label(label);
+    }
+    tcg_temp_free(tmp);
 }
 
 static void disas_xtensa_insn(DisasContext *dc)
@@ -1272,8 +1296,11 @@ static void disas_xtensa_insn(DisasContext *dc)
 
     case 2: /*LSAI*/
 #define gen_load_store(type, shift) do { \
-            TCGv_i32 addr = tcg_temp_new_i32(); \
+            TCGv_i32 addr = tcg_temp_local_new_i32(); \
             tcg_gen_addi_i32(addr, cpu_R[RRI8_S], RRI8_IMM8 << shift); \
+            if (shift) { \
+                gen_load_store_alignment(dc, shift, addr); \
+            } \
             tcg_gen_qemu_##type(cpu_R[RRI8_T], addr, 0); \
             tcg_temp_free(addr); \
         } while (0)
@@ -1432,6 +1459,7 @@ static void disas_xtensa_insn(DisasContext *dc)
 
                 tcg_gen_mov_i32(tmp, cpu_R[RRI8_T]);
                 tcg_gen_addi_i32(addr, cpu_R[RRI8_S], RRI8_IMM8 << 2);
+                gen_load_store_alignment(dc, 2, addr);
                 tcg_gen_qemu_ld32u(cpu_R[RRI8_T], addr, 0);
                 tcg_gen_brcond_i32(TCG_COND_NE, tmp, cpu_SR[SCOMPARE1], label);
 
@@ -1657,8 +1685,9 @@ static void disas_xtensa_insn(DisasContext *dc)
         break;
 
 #define gen_narrow_load_store(type) do { \
-            TCGv_i32 addr = tcg_temp_new_i32(); \
+            TCGv_i32 addr = tcg_temp_local_new_i32(); \
             tcg_gen_addi_i32(addr, cpu_R[RRRN_S], RRRN_R << 2); \
+            gen_load_store_alignment(dc, 2, addr); \
             tcg_gen_qemu_##type(cpu_R[RRRN_T], addr, 0); \
             tcg_temp_free(addr); \
         } while (0)
