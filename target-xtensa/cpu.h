@@ -106,6 +106,9 @@ enum {
 };
 
 enum {
+    LBEG = 0,
+    LEND = 1,
+    LCOUNT = 2,
     SAR = 3,
     SCOMPARE1 = 12,
     WINDOW_BASE = 72,
@@ -257,12 +260,17 @@ static inline int cpu_mmu_index(CPUState *env)
     return xtensa_get_cring(env) != 0;
 }
 
+#define XTENSA_TBFLAG_EXCM 0x1
+
 static inline void cpu_get_tb_cpu_state(CPUState *env, target_ulong *pc,
         target_ulong *cs_base, int *flags)
 {
     *pc = env->pc;
     *cs_base = 0;
     *flags = 0;
+    if (env->sregs[PS] & PS_EXCM) {
+        *flags |= XTENSA_TBFLAG_EXCM;
+    }
 }
 
 #include "cpu-all.h"
