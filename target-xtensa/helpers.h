@@ -16,4 +16,9 @@ DEF_HELPER_1(wsr_lend, void, i32)
 DEF_HELPER_0(simcall, void)
 DEF_HELPER_0(dump_state, void)
 
+DEF_HELPER_0(check_interrupts, void)
+DEF_HELPER_2(waiti, void, i32, i32)
+DEF_HELPER_2(timer_irq, void, i32, i32)
+DEF_HELPER_1(advance_ccount, void, i32)
+
 #include "def-helper.h"

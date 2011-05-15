@@ -35,7 +35,7 @@ register struct CPUXtensaState *env asm(AREG0);
 
 static inline int cpu_has_work(CPUState *env)
 {
-    return 1;
+    return env->pending_irq_level;
 }
 
 #if !defined(CONFIG_USER_ONLY)
