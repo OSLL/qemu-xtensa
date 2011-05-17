@@ -380,6 +380,7 @@ obj-alpha-y = alpha_palcode.o
 
 obj-xtensa-y += xtensa_pic.o
 obj-xtensa-y += xtensa_sample.o
+obj-xtensa-y += xtensa-semi.o
 
 main.o: QEMU_CFLAGS+=$(GPROF_CFLAGS)
 
