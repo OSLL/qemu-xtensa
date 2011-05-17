@@ -35,6 +35,7 @@
 #include "disas.h"
 #include "tcg-op.h"
 #include "qemu-log.h"
+#include "sysemu.h"
 
 #include "helpers.h"
 #define GEN_HELPER 1
@@ -675,7 +676,12 @@ static void disas_xtensa_insn(DisasContext *dc)
                         break;
 
                     case 1: /*SIMCALL*/
-                        TBD();
+                        if (semihosting_enabled) {
+                            gen_helper_simcall();
+                        } else {
+                            qemu_log("SIMCALL but semihosting is disabled\n");
+                            gen_exception_cause(dc, ILLEGAL_INSTRUCTION_CAUSE);
+                        }
                         break;
 
                     default:

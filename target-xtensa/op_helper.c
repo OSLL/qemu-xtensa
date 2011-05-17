@@ -291,6 +291,11 @@ void HELPER(wsr_lend)(uint32_t v)
     }
 }
 
+void HELPER(simcall)(void)
+{
+    simcall(env);
+}
+
 void HELPER(dump_state)(void)
 {
     cpu_dump_state(env, stderr, fprintf, 0);

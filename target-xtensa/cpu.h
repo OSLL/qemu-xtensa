@@ -226,6 +226,7 @@ int cpu_xtensa_signal_handler(int host_signum, void *pinfo, void *puc);
 void xtensa_cpu_list(FILE *f, fprintf_function cpu_fprintf);
 void xtensa_sync_window_from_phys(CPUState *env);
 void xtensa_sync_phys_from_window(CPUState *env);
+void simcall(CPUState *env);
 
 static inline int xtensa_option_enabled(const XtensaConfig *config, int opt)
 {
