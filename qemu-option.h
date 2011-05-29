@@ -132,4 +132,7 @@ int qemu_opts_print(QemuOpts *opts, void *dummy);
 int qemu_opts_foreach(QemuOptsList *list, qemu_opts_loopfunc func, void *opaque,
                       int abort_on_failure);
 
+bool get_executable_image_args(int i, const char **filename, int *argc,
+        char ***argv);
+
 #endif

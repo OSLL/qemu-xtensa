@@ -1710,6 +1710,22 @@ Use @var{bzImage} as kernel image. The kernel can be either a Linux kernel
 or in multiboot format.
 ETEXI
 
+DEF("start-argv", 0, QEMU_OPTION_start_argv, \
+    "-start-argv begin args passed to previous -kernel\n", QEMU_ARCH_ALL)
+STEXI
+@item -start-argv
+@findex -start-argv
+Following arguments up to -end-argv are passed to the previously loaded kernel.
+ETEXI
+
+DEF("end-argv", 0, QEMU_OPTION_end_argv, \
+    "-end-argv end args passed to previous -kernel\n", QEMU_ARCH_ALL)
+STEXI
+@item -end-argv
+@findex -end-argv
+Terminates argument list passed to the previously loaded kernel.
+ETEXI
+
 DEF("append", HAS_ARG, QEMU_OPTION_append, \
     "-append cmdline use 'cmdline' as kernel command line\n", QEMU_ARCH_ALL)
 STEXI

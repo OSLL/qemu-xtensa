@@ -168,28 +168,42 @@ void HELPER(simcall)(CPUState *env)
         break;
 
     case TARGET_SYS_argc:
-        regs[2] = 1;
+        regs[2] = env->argc;
         regs[3] = 0;
         break;
 
     case TARGET_SYS_argv_sz:
-        regs[2] = 128;
-        regs[3] = 0;
+        {
+            uint32_t sz = 0;
+            int i;
+            for (i = 0; i <= env->argc; ++i) {
+                sz += sizeof(uint32_t);
+                if (env->argv && env->argv[i]) {
+                    sz += strlen(env->argv[i] + 1);
+                }
+            }
+            regs[2] = sz;
+            regs[3] = 0;
+        }
         break;
 
     case TARGET_SYS_argv:
         {
-            struct Argv {
-                uint32_t argptr[2];
-                char text[120];
-            } argv = {
-                {0, 0},
-                "test"
-            };
-
-            argv.argptr[0] = tswap32(regs[3] + offsetof(struct Argv, text));
-            cpu_memory_rw_debug(
-                    env, regs[3], (uint8_t *)&argv, sizeof(argv), 1);
+            uint32_t strings = regs[3] + (env->argc + 1) * sizeof(uint32_t);
+            int i;
+            for (i = 0; i <= env->argc; ++i) {
+                uint32_t ptr = i < env->argc ? tswap32(strings) : 0;
+                cpu_memory_rw_debug(env,
+                        regs[3] + i * sizeof(uint32_t),
+                        (uint8_t *)&ptr, sizeof(ptr), 1);
+                if (env->argv && env->argv[i]) {
+                    cpu_memory_rw_debug(env,
+                            strings,
+                            (uint8_t *)env->argv[i],
+                            strlen(env->argv[i]) + 1, 1);
+                    strings += strlen(env->argv[i]) + 1;
+                }
+            }
         }
         break;
 

@@ -2033,6 +2033,31 @@ static const QEMUOption *lookup_opt(int argc, char **argv,
     return popt;
 }
 
+enum {
+    MAX_EXECUTABLE_IMAGES = 16,
+};
+
+typedef struct {
+    const char *filename;
+    int argc;
+    char **argv;
+} executable_image_t;
+
+static int last_executable_image = -1;
+static executable_image_t executable_image[MAX_EXECUTABLE_IMAGES];
+
+bool get_executable_image_args(int i, const char **filename, int *argc,
+        char ***argv)
+{
+    if (i >= 0 && i <= last_executable_image) {
+        *filename = executable_image[i].filename;
+        *argc = executable_image[i].argc;
+        *argv = executable_image[i].argv;
+        return true;
+    }
+    return false;
+}
+
 int main(int argc, char **argv, char **envp)
 {
     const char *gdbstub_dev = NULL;
@@ -2060,6 +2085,7 @@ int main(int argc, char **argv, char **envp)
 #endif
     int defconfig = 1;
     const char *trace_file = NULL;
+    bool passing_argv = false;
 
     atexit(qemu_run_exit_notifiers);
     error_set_progname(argv[0]);
@@ -2103,10 +2129,20 @@ int main(int argc, char **argv, char **envp)
         } else {
             const QEMUOption *popt;
 
+            if (passing_argv) {
+                if (0 == strcmp(argv[optind], "-end-argv")) {
+                    passing_argv = false;
+                }
+                ++optind;
+                continue;
+            }
             popt = lookup_opt(argc, argv, &optarg, &optind);
             switch (popt->index) {
             case QEMU_OPTION_nodefconfig:
                 defconfig=0;
+                break;
+            case QEMU_OPTION_start_argv:
+                passing_argv = true;
                 break;
             }
         }
@@ -2129,14 +2165,29 @@ int main(int argc, char **argv, char **envp)
 
     /* second pass of option parsing */
     optind = 1;
+    passing_argv = false;
     for(;;) {
         if (optind >= argc)
             break;
         if (argv[optind][0] != '-') {
-	    hda_opts = drive_add(IF_DEFAULT, 0, argv[optind++], HD_OPTS);
+            if (passing_argv) {
+                ++executable_image[last_executable_image].argc;
+                ++optind;
+            } else {
+                hda_opts = drive_add(IF_DEFAULT, 0, argv[optind++], HD_OPTS);
+            }
         } else {
             const QEMUOption *popt;
 
+            if (passing_argv) {
+                if (0 == strcmp(argv[optind], "-end-argv")) {
+                    passing_argv = false;
+                } else {
+                    ++executable_image[last_executable_image].argc;
+                    ++optind;
+                    continue;
+                }
+            }
             popt = lookup_opt(argc, argv, &optarg, &optind);
             if (!(popt->arch_mask & arch_type)) {
                 printf("Option %s not supported for this target\n", popt->name);
@@ -2293,6 +2344,17 @@ int main(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_kernel:
                 kernel_filename = optarg;
+                ++last_executable_image;
+                executable_image[last_executable_image].filename = optarg;
+                break;
+            case QEMU_OPTION_start_argv:
+                executable_image[last_executable_image].argc = 0;
+                executable_image[last_executable_image].argv = argv + optind;
+                passing_argv = true;
+                break;
+            case QEMU_OPTION_end_argv:
+                argv[optind] = NULL;
+                passing_argv = false;
                 break;
             case QEMU_OPTION_append:
                 kernel_cmdline = optarg;

@@ -44,16 +44,6 @@ static void xtensa_init(ram_addr_t ram_size,
     ram_addr_t ram_offset;
     int n;
 
-    for (n = 0; n < smp_cpus; n++) {
-        env = cpu_init(cpu_model);
-        if (!env) {
-            fprintf(stderr, "Unable to find CPU definition\n");
-            exit(1);
-        }
-        qemu_register_reset(xtensa_sample_reset, env);
-        env->sregs[PRID] = n;
-    }
-
     ram_offset = qemu_ram_alloc(NULL, "xtensa.dram", 0x10000);
     cpu_register_physical_memory(0x5ffd0000, 0x10000, ram_offset);
 
@@ -63,18 +53,31 @@ static void xtensa_init(ram_addr_t ram_size,
     ram_offset = qemu_ram_alloc(NULL, "xtensa.sram", ram_size);
     cpu_register_physical_memory(0x60000000, ram_size, ram_offset);
 
-    if (kernel_filename) {
-        uint64_t elf_entry;
-        uint64_t elf_lowaddr;
+    for (n = 0; n < smp_cpus; n++) {
+        const char *elf_filename;
+
+        env = cpu_init(cpu_model);
+        if (!env) {
+            fprintf(stderr, "Unable to find CPU definition\n");
+            exit(1);
+        }
+        qemu_register_reset(xtensa_sample_reset, env);
+        env->sregs[PRID] = n;
+
+        if (get_executable_image_args(n, &elf_filename, &env->argc,
+                    &env->argv)) {
+            uint64_t elf_entry;
+            uint64_t elf_lowaddr;
 #ifdef TARGET_WORDS_BIGENDIAN
-        int success = load_elf(kernel_filename, NULL, NULL, &elf_entry,
-                &elf_lowaddr, NULL, 1, ELF_MACHINE, 0);
+            int success = load_elf(elf_filename, NULL, NULL, &elf_entry,
+                    &elf_lowaddr, NULL, 1, ELF_MACHINE, 0);
 #else
-        int success = load_elf(kernel_filename, NULL, NULL, &elf_entry,
-                &elf_lowaddr, NULL, 0, ELF_MACHINE, 0);
+            int success = load_elf(elf_filename, NULL, NULL, &elf_entry,
+                    &elf_lowaddr, NULL, 0, ELF_MACHINE, 0);
 #endif
-        if (success > 0) {
-            env->pc = elf_entry;
+            if (success > 0) {
+                env->pc = elf_entry;
+            }
         }
     }
 }
