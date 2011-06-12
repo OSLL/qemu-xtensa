@@ -54,7 +54,9 @@ static void do_restore_state(void *pc_ptr)
 
     tb = tb_find_pc(pc);
     if (tb) {
-        cpu_restore_state(tb, env, pc);
+        if (cpu_restore_state(tb, env, pc)) {
+            qemu_log("cpu_restore_state(%08x) failed\n", pc);
+        }
     }
 }
 
@@ -71,11 +73,30 @@ static void do_unaligned_access(target_ulong addr, int is_write, int is_user,
 
 void tlb_fill(target_ulong addr, int is_write, int mmu_idx, void *retaddr)
 {
-    tlb_set_page(cpu_single_env,
-            addr & ~(TARGET_PAGE_SIZE - 1),
-            addr & ~(TARGET_PAGE_SIZE - 1),
-            PAGE_READ | PAGE_WRITE | PAGE_EXEC,
-            mmu_idx, TARGET_PAGE_SIZE);
+    CPUState *saved_env = env;
+
+    env = cpu_single_env;
+
+    qemu_log("%s(%08x, %d, %d, %d)\n",
+            __func__, addr, is_write, mmu_idx, retaddr != 0);
+
+    if (env->config->options &
+            (XTENSA_OPTION_BIT(XTENSA_OPTION_MMU) |
+             XTENSA_OPTION_BIT(XTENSA_OPTION_REGION_PROTECTION) |
+             XTENSA_OPTION_BIT(XTENSA_OPTION_REGION_TRANSLATION))) {
+        int ret = xtensa_handle_mmu_fault(env, addr, is_write, mmu_idx);
+        if (ret != 0) {
+            do_restore_state(retaddr);
+            HELPER(exception_cause_vaddr)(env->pc, ret, addr);
+        }
+    } else {
+        tlb_set_page(env,
+                addr & TARGET_PAGE_MASK,
+                addr & TARGET_PAGE_MASK,
+                PAGE_READ | PAGE_WRITE | PAGE_EXEC,
+                mmu_idx, TARGET_PAGE_SIZE);
+    }
+    env = saved_env;
 }
 
 void HELPER(exception)(uint32_t excp)
@@ -370,4 +391,269 @@ void HELPER(timer_irq)(uint32_t id, uint32_t active)
 void HELPER(advance_ccount)(uint32_t d)
 {
     xtensa_advance_ccount(env, d);
+}
+
+void HELPER(wsr_rasid)(uint32_t v)
+{
+    qemu_log("%s: %08x\n", __func__, v);
+    env->sregs[RASID] = (v & 0xffffff00) | 1;
+    /*TODO may count number of used translations to changed rings
+     * and flush only if there are some
+     */
+    tlb_flush(env, 1);
+}
+
+static uint32_t get_page_size(const CPUState *env, bool dtlb, uint32_t way)
+{
+    uint32_t tlbcfg = env->sregs[dtlb ? DTLBCFG : ITLBCFG];
+
+    switch (way) {
+    case 4:
+        return (tlbcfg >> 16) & 3;
+
+    case 5:
+        return (tlbcfg >> 20) & 1;
+
+    case 6:
+        return (tlbcfg >> 24) & 1;
+
+    default:
+        return 0;
+    }
+}
+
+/*!
+ * Get bit mask for the bits that get translated by the specified TLB way
+ */
+uint32_t xtensa_tlb_get_addr_mask(const CPUState *env, bool dtlb, uint32_t way)
+{
+    if (xtensa_option_enabled(env->config, XTENSA_OPTION_MMU)) {
+        bool varway56 = dtlb ?
+            env->config->dtlb.varway56 :
+            env->config->itlb.varway56;
+
+        switch (way) {
+        case 4:
+            return 0xfff00000 << get_page_size(env, dtlb, way) * 2;
+
+        case 5:
+            if (varway56) {
+                return 0xf8000000 << get_page_size(env, dtlb, way);
+            } else {
+                return 0xf8000000;
+            }
+
+        case 6:
+            if (varway56) {
+                return 0xf0000000 << (1 - get_page_size(env, dtlb, way));
+            } else {
+                return 0xf0000000;
+            }
+
+        default:
+            return 0xfffff000;
+        }
+    } else {
+        return REGION_PAGE_MASK;
+    }
+}
+
+/*!
+ * Get bitmask for the 'VPN without index' field
+ */
+static uint32_t get_vpn_mask(const CPUState *env, bool dtlb, uint32_t way)
+{
+    if (way < 4) {
+        bool is32 = (dtlb ?
+                env->config->dtlb.nrefillentries :
+                env->config->itlb.nrefillentries) == 32;
+        return is32 ? 0xffff8000 : 0xffffc000;
+    } else if (way == 4) {
+        return xtensa_tlb_get_addr_mask(env, dtlb, way) << 2;
+    } else if (way <= 6) {
+        uint32_t mask = xtensa_tlb_get_addr_mask(env, dtlb, way);
+        bool varway56 = dtlb ?
+            env->config->dtlb.varway56 :
+            env->config->itlb.varway56;
+
+        if (varway56) {
+            return mask << (way == 5 ? 2 : 3);
+        } else {
+            return mask << 1;
+        }
+    } else {
+        return 0xfffff000;
+    }
+}
+
+void split_tlb_entry_spec_way(const CPUState *env, uint32_t v, bool dtlb,
+        uint32_t *vpn, uint32_t wi, uint32_t *ei)
+{
+    bool varway56 = dtlb ?
+        env->config->dtlb.varway56 :
+        env->config->itlb.varway56;
+
+    if (!dtlb) {
+        wi &= 7;
+    }
+
+    if (wi < 4) {
+        bool is32 = (dtlb ?
+                env->config->dtlb.nrefillentries :
+                env->config->itlb.nrefillentries) == 32;
+        *ei = (v >> 12) & (is32 ? 7 : 3);
+    } else {
+        switch (wi) {
+        case 4:
+            {
+                uint32_t eibase = 20 + get_page_size(env, dtlb, wi) * 2;
+                *ei = (v >> eibase) & 3;
+            }
+            break;
+
+        case 5:
+            if (varway56) {
+                uint32_t eibase = 27 + get_page_size(env, dtlb, wi);
+                *ei = (v >> eibase) & 3;
+            } else {
+                *ei = (v >> 27) & 1;
+            }
+            break;
+
+        case 6:
+            if (varway56) {
+                uint32_t eibase = 29 - get_page_size(env, dtlb, wi);
+                *ei = (v >> eibase) & 7;
+            } else {
+                *ei = (v >> 28) & 1;
+            }
+            break;
+
+        default:
+            *ei = 0;
+            break;
+        }
+    }
+    *vpn = v & xtensa_tlb_get_addr_mask(env, dtlb, wi);
+}
+
+static void split_tlb_entry_spec(uint32_t v, bool dtlb,
+        uint32_t *vpn, uint32_t *wi, uint32_t *ei)
+{
+    if (xtensa_option_enabled(env->config, XTENSA_OPTION_MMU)) {
+        *wi = v & (dtlb ? 0xf : 0x7);
+        split_tlb_entry_spec_way(env, v, dtlb, vpn, *wi, ei);
+    } else {
+        *vpn = v & REGION_PAGE_MASK;
+        *wi = 0;
+        *ei = (v >> 29) & 7;
+    }
+}
+
+static xtensa_tlb_entry_t *get_tlb_entry(uint32_t v, bool dtlb, uint32_t *_wi)
+{
+    uint32_t vpn;
+    uint32_t wi;
+    uint32_t ei;
+
+    split_tlb_entry_spec(v, dtlb, &vpn, &wi, &ei);
+    if (_wi) {
+        *_wi = wi;
+    }
+    return xtensa_get_tlb_entry(env, dtlb, wi, ei);
+}
+
+uint32_t HELPER(rtlb0)(uint32_t v, uint32_t dtlb)
+{
+    if (xtensa_option_enabled(env->config, XTENSA_OPTION_MMU)) {
+        uint32_t wi;
+        const xtensa_tlb_entry_t *entry = get_tlb_entry(v, dtlb, &wi);
+        return (entry->vaddr & get_vpn_mask(env, dtlb, wi)) | entry->asid;
+    } else {
+        return v & REGION_PAGE_MASK;
+    }
+}
+
+uint32_t HELPER(rtlb1)(uint32_t v, uint32_t dtlb)
+{
+    const xtensa_tlb_entry_t *entry = get_tlb_entry(v, dtlb, NULL);
+    return entry->paddr | entry->attr;
+}
+
+void HELPER(itlb)(uint32_t v, uint32_t dtlb)
+{
+    if (xtensa_option_enabled(env->config, XTENSA_OPTION_MMU)) {
+        uint32_t wi;
+        xtensa_tlb_entry_t *entry = get_tlb_entry(v, dtlb, &wi);
+        if (entry->variable && entry->asid) {
+            tlb_flush_page(env, entry->vaddr);
+            entry->asid = 0;
+        }
+    }
+}
+
+uint32_t HELPER(ptlb)(uint32_t v, uint32_t dtlb)
+{
+    if (xtensa_option_enabled(env->config, XTENSA_OPTION_MMU)) {
+        uint32_t wi;
+        uint32_t ei;
+        uint8_t ring;
+        int res = xtensa_tlb_lookup(env, v, dtlb, &wi, &ei, &ring);
+
+        switch (res) {
+        case 0:
+            if (ring >= xtensa_get_ring(env)) {
+                return (v & 0xfffff000) | wi | (dtlb ? 16 : 8);
+            }
+            break;
+
+        case INST_TLB_MULTI_HIT_CAUSE:
+        case LOAD_STORE_TLB_MULTI_HIT_CAUSE:
+            HELPER(exception_cause_vaddr)(env->pc, res, v);
+            break;
+        }
+        return 0;
+    } else {
+        return (v & REGION_PAGE_MASK) | 1;
+    }
+}
+
+void xtensa_tlb_set_entry(CPUState *env, bool dtlb,
+        unsigned wi, unsigned ei, uint32_t vpn, uint32_t pte)
+{
+    xtensa_tlb_entry_t *entry = xtensa_get_tlb_entry(env, dtlb, wi, ei);
+
+    if (xtensa_option_enabled(env->config, XTENSA_OPTION_MMU)) {
+        if (entry->variable) {
+            if (entry->asid) {
+                tlb_flush_page(env, entry->vaddr);
+            }
+            entry->vaddr = vpn;
+            entry->paddr = pte & xtensa_tlb_get_addr_mask(env, dtlb, wi);
+            entry->asid = (env->sregs[RASID] >> ((pte >> 1) & 24)) & 0xff;
+            entry->attr = pte & 0xf;
+        } else {
+            qemu_log("%s %d, %d, %d trying to set immutable entry\n",
+                    __func__, dtlb, wi, ei);
+        }
+    } else {
+        tlb_flush_page(env, entry->vaddr);
+        entry->vaddr = vpn;
+        if (xtensa_option_enabled(env->config,
+                    XTENSA_OPTION_REGION_TRANSLATION)) {
+            entry->paddr = pte & REGION_PAGE_MASK;
+        } else {
+            entry->paddr = vpn;
+        }
+        entry->attr = pte & 0xf;
+    }
+}
+
+void HELPER(wtlb)(uint32_t p, uint32_t v, uint32_t dtlb)
+{
+    uint32_t vpn;
+    uint32_t wi;
+    uint32_t ei;
+    split_tlb_entry_spec(v, dtlb, &vpn, &wi, &ei);
+    xtensa_tlb_set_entry(env, dtlb, wi, ei, vpn, p);
 }

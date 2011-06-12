@@ -21,4 +21,11 @@ DEF_HELPER_2(waiti, void, i32, i32)
 DEF_HELPER_2(timer_irq, void, i32, i32)
 DEF_HELPER_1(advance_ccount, void, i32)
 
+DEF_HELPER_1(wsr_rasid, void, i32)
+DEF_HELPER_2(rtlb0, i32, i32, i32)
+DEF_HELPER_2(rtlb1, i32, i32, i32)
+DEF_HELPER_2(itlb, void, i32, i32)
+DEF_HELPER_2(ptlb, i32, i32, i32)
+DEF_HELPER_3(wtlb, void, i32, i32, i32)
+
 #include "def-helper.h"

@@ -114,6 +114,10 @@ enum {
     SCOMPARE1 = 12,
     WINDOW_BASE = 72,
     WINDOW_START = 73,
+    PTEVADDR = 83,
+    RASID = 90,
+    ITLBCFG = 91,
+    DTLBCFG = 92,
     EPC1 = 177,
     DEPC = 192,
     EPS2 = 194,
@@ -154,6 +158,9 @@ enum {
 #define MAX_NLEVEL 6
 #define MAX_NNMI 1
 #define MAX_NCCOMPARE 3
+#define MAX_TLB_WAY_SIZE 8
+
+#define REGION_PAGE_MASK 0xe0000000
 
 enum {
     /* Static vectors */
@@ -213,6 +220,21 @@ typedef enum {
     INTTYPE_WRITE_ERR,
 } interrupt_type_t;
 
+typedef struct xtensa_tlb_entry {
+    uint32_t vaddr;
+    uint32_t paddr;
+    uint8_t asid;
+    uint8_t attr;
+    bool variable;
+} xtensa_tlb_entry_t;
+
+typedef struct xtensa_tlb {
+    unsigned nways;
+    const unsigned way_size[10];
+    bool varway56;
+    unsigned nrefillentries;
+} xtensa_tlb_t;
+
 typedef struct XtensaGdbReg {
     int targno;
     int type;
@@ -245,6 +267,9 @@ typedef struct XtensaConfig {
     unsigned nccompare;
     uint32_t timerint[MAX_NCCOMPARE];
     uint32_t clock_freq_khz;
+
+    xtensa_tlb_t itlb;
+    xtensa_tlb_t dtlb;
 } XtensaConfig;
 
 typedef struct CPUXtensaState {
@@ -254,6 +279,10 @@ typedef struct CPUXtensaState {
     uint32_t sregs[256];
     uint32_t uregs[256];
     uint32_t phys_regs[MAX_NAREG];
+
+    xtensa_tlb_entry_t itlb[7][MAX_TLB_WAY_SIZE];
+    xtensa_tlb_entry_t dtlb[10][MAX_TLB_WAY_SIZE];
+    unsigned autorefill_idx;
 
     int pending_irq_level; /* level of last raised IRQ */
     void **irq_inputs;
@@ -284,6 +313,16 @@ int cpu_xtensa_signal_handler(int host_signum, void *pinfo, void *puc);
 void xtensa_cpu_list(FILE *f, fprintf_function cpu_fprintf);
 void xtensa_sync_window_from_phys(CPUState *env);
 void xtensa_sync_phys_from_window(CPUState *env);
+int xtensa_handle_mmu_fault(CPUState *env, target_ulong addr,
+        int is_write, int mmu_idx);
+uint32_t xtensa_tlb_get_addr_mask(const CPUState *env, bool dtlb, uint32_t way);
+void split_tlb_entry_spec_way(const CPUState *env, uint32_t v, bool dtlb,
+        uint32_t *vpn, uint32_t wi, uint32_t *ei);
+int xtensa_tlb_lookup(const CPUState *env, uint32_t addr, bool dtlb,
+        uint32_t *_wi, uint32_t *_ei, uint8_t *_ring);
+void xtensa_tlb_set_entry(CPUState *env, bool dtlb,
+        unsigned wi, unsigned ei, uint32_t vpn, uint32_t pte);
+
 
 #define XTENSA_OPTION_BIT(opt) (((uint64_t)1) << (opt))
 
@@ -318,6 +357,14 @@ static inline int xtensa_get_cring(const CPUState *env)
     } else {
         return 0;
     }
+}
+
+static inline xtensa_tlb_entry_t *xtensa_get_tlb_entry(CPUState *env,
+        bool dtlb, unsigned wi, unsigned ei)
+{
+    return dtlb ?
+        env->dtlb[wi] + ei :
+        env->itlb[wi] + ei;
 }
 
 /* MMU modes definitions */
