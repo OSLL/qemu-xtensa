@@ -1541,6 +1541,89 @@ static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
     }
     return 4;
 }
+#elif defined(TARGET_XTENSA)
+
+#define GDB_CORE_XML "xtensa-core.xml"
+#define NUM_CORE_REGS (45)
+
+static int cpu_gdb_read_register(CPUState *env, uint8_t *mem_buf, int n)
+{
+    const XtensaGdbReg *reg = env->config->gdb_regmap.reg + n;
+
+    if (n < 0 || n >= env->config->gdb_regmap.num_regs) {
+        return 0;
+    }
+
+    switch (reg->type) {
+    case 9: /*pc*/
+        GET_REG32(env->pc);
+        break;
+
+    case 1: /*ar*/
+        xtensa_sync_phys_from_window(env);
+        GET_REG32(env->phys_regs[(reg->targno & 0xff) % env->config->nareg]);
+        break;
+
+    case 2: /*SR*/
+        GET_REG32(env->sregs[reg->targno & 0xff]);
+        break;
+
+    case 3: /*UR*/
+        GET_REG32(env->uregs[reg->targno & 0xff]);
+        break;
+
+    case 8: /*a*/
+        GET_REG32(env->regs[reg->targno & 0x0f]);
+        break;
+
+    default:
+        qemu_log("%s from reg %d of unsupported type %d\n",
+                __func__, n, reg->type);
+        return 0;
+    }
+}
+
+static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
+{
+    uint32_t tmp;
+    const XtensaGdbReg *reg = env->config->gdb_regmap.reg + n;
+
+    if (n < 0 || n >= env->config->gdb_regmap.num_regs) {
+        return 0;
+    }
+
+    tmp = ldl_p(mem_buf);
+
+    switch (reg->type) {
+    case 9: /*pc*/
+        env->pc = tmp;
+        break;
+
+    case 1: /*ar*/
+        env->phys_regs[(reg->targno & 0xff) % env->config->nareg] = tmp;
+        xtensa_sync_window_from_phys(env);
+        break;
+
+    case 2: /*SR*/
+        env->sregs[reg->targno & 0xff] = tmp;
+        break;
+
+    case 3: /*UR*/
+        env->uregs[reg->targno & 0xff] = tmp;
+        break;
+
+    case 8: /*a*/
+        env->regs[reg->targno & 0x0f] = tmp;
+        break;
+
+    default:
+        qemu_log("%s to reg %d of unsupported type %d\n",
+                __func__, n, reg->type);
+        return 0;
+    }
+
+    return 4;
+}
 #else
 
 #define NUM_CORE_REGS 0
@@ -1817,6 +1900,8 @@ static void gdb_set_cpu_pc(GDBState *s, target_ulong pc)
     cpu_synchronize_state(s->c_cpu);
     s->c_cpu->psw.addr = pc;
 #elif defined (TARGET_LM32)
+    s->c_cpu->pc = pc;
+#elif defined(TARGET_XTENSA)
     s->c_cpu->pc = pc;
 #endif
 }

@@ -213,9 +213,22 @@ typedef enum {
     INTTYPE_WRITE_ERR,
 } interrupt_type_t;
 
+typedef struct XtensaGdbReg {
+    int targno;
+    int type;
+    int group;
+} XtensaGdbReg;
+
+typedef struct XtensaGdbRegmap {
+    int num_regs;
+    int num_core_regs;
+    XtensaGdbReg reg[256];
+} XtensaGdbRegmap;
+
 typedef struct XtensaConfig {
     const char *name;
     uint64_t options;
+    XtensaGdbRegmap gdb_regmap;
     unsigned nareg;
     int excm_level;
     int ndepc;

@@ -34,6 +34,10 @@
 #include "hw/loader.h"
 #endif
 
+#define XTREG(idx, ofs, bi, sz, al, _targno, flags, cp, typ, _group, name, \
+        a1, a2, a3, a4, a5, a6) \
+    { .targno = (_targno), .type = (typ), .group = (_group) },
+
 void cpu_reset(CPUXtensaState *env)
 {
     env->exception_taken = 0;
@@ -51,6 +55,13 @@ static const XtensaConfig core_config[] = {
         .options = -1 ^
             (XTENSA_OPTION_BIT(XTENSA_OPTION_HW_ALIGNMENT) |
              XTENSA_OPTION_BIT(XTENSA_OPTION_MMU)),
+        .gdb_regmap = {
+            .num_regs = 113,
+            .num_core_regs = 45,
+            .reg = {
+#include "gdb-config-sample-xtensa-core.c"
+            }
+        },
         .nareg = 64,
         .ndepc = 1,
         .excm_level = 16,
