@@ -565,6 +565,12 @@ int cpu_exec(CPUState *env1)
                         do_interrupt(env);
                         next_tb = 0;
                     }
+#elif defined(TARGET_XTENSA)
+                    if (interrupt_request & CPU_INTERRUPT_HARD) {
+                        env->exception_index = EXC_IRQ;
+                        do_interrupt(env);
+                        next_tb = 0;
+                    }
 #endif
                    /* Don't use the cached interrupt_request value,
                       do_interrupt may have updated the EXITTB flag. */
