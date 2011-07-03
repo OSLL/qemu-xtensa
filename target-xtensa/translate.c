@@ -101,12 +101,14 @@ static const char * const sregnames[256] = {
     [EXCSAVE1 + 4] = "EXCSAVE5",
     [EXCSAVE1 + 5] = "EXCSAVE6",
     [EXCSAVE1 + 6] = "EXCSAVE7",
+    [CPENABLE] = "CPENABLE",
     [INTSET] = "INTSET",
     [INTCLEAR] = "INTCLEAR",
     [INTENABLE] = "INTENABLE",
     [PS] = "PS",
     [EXCCAUSE] = "EXCCAUSE",
     [CCOUNT] = "CCOUNT",
+    [PRID] = "PRID",
     [EXCVADDR] = "EXCVADDR",
     [CCOMPARE] = "CCOMPARE0",
     [CCOMPARE + 1] = "CCOMPARE1",
@@ -447,6 +449,10 @@ static void gen_wsr_ps(DisasContext *dc, uint32_t sr, TCGv_i32 v)
     gen_jumpi_check_loop_end(dc, -1);
 }
 
+static void gen_wsr_prid(DisasContext *dc, uint32_t sr, TCGv_i32 v)
+{
+}
+
 static void gen_wsr_ccompare(DisasContext *dc, uint32_t sr, TCGv_i32 v)
 {
     TCGv_i32 id = tcg_const_i32(sr - CCOMPARE);
@@ -469,6 +475,7 @@ static void gen_wsr(DisasContext *dc, uint32_t sr, TCGv_i32 s)
         [WINDOW_BASE] = gen_wsr_windowbase,
         [WINDOW_START] = gen_wsr_windowstart,
         [PS] = gen_wsr_ps,
+        [PRID] = gen_wsr_prid,
         [CCOMPARE] = gen_wsr_ccompare,
         [CCOMPARE + 1] = gen_wsr_ccompare,
         [CCOMPARE + 2] = gen_wsr_ccompare,
