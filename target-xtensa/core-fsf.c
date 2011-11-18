@@ -36,7 +36,13 @@
 static const XtensaConfig fsf = {
     .name = "fsf",
     .options = XTENSA_OPTIONS,
-    /* GDB for this core is not supported currently */
+    .gdb_regmap = {
+        .num_regs = 131,
+        .num_core_regs = 75,
+        .reg = {
+#include "core-fsf/gdb-config.c"
+        }
+    },
     .nareg = XCHAL_NUM_AREGS,
     .ndepc = 1,
     EXCEPTIONS_SECTION,
