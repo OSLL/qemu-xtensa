@@ -35,7 +35,13 @@
 
 static const XtensaConfig fsf __attribute__((unused)) = {
     .name = "fsf",
-    /* GDB for this core is not supported currently */
+    .gdb_regmap = {
+        .num_regs = 131,
+        .num_core_regs = 75,
+        .reg = {
+#include "core-fsf/gdb-config.c"
+        }
+    },
     .clock_freq_khz = 10000,
     DEFAULT_SECTIONS
 };
