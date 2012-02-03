@@ -45,4 +45,12 @@ DEF_HELPER_3(mul_s, f32, env, f32, f32)
 DEF_HELPER_4(madd_s, f32, env, f32, f32, f32)
 DEF_HELPER_4(msub_s, f32, env, f32, f32, f32)
 
+DEF_HELPER_4(un_s, void, env, i32, f32, f32)
+DEF_HELPER_4(oeq_s, void, env, i32, f32, f32)
+DEF_HELPER_4(ueq_s, void, env, i32, f32, f32)
+DEF_HELPER_4(olt_s, void, env, i32, f32, f32)
+DEF_HELPER_4(ult_s, void, env, i32, f32, f32)
+DEF_HELPER_4(ole_s, void, env, i32, f32, f32)
+DEF_HELPER_4(ule_s, void, env, i32, f32, f32)
+
 #include "def-helper.h"
