@@ -5,5 +5,6 @@ obj-y += xtensa-semi.o
 obj-y += core-cpu3400.o
 obj-y += core-dc232b.o
 obj-y += core-dc233c.o
+obj-y += core-dsp3400.o
 obj-y += core-fsf.o
 obj-y += core-test_kc705_ca.o
