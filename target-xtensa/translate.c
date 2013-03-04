@@ -2917,8 +2917,7 @@ void gen_intermediate_code_internal(XtensaCPU *cpu,
 
     gen_tb_start();
 
-    if (env->singlestep_enabled && env->exception_taken) {
-        env->exception_taken = 0;
+    if (tb->flags & XTENSA_TBFLAG_EXCEPTION) {
         tcg_gen_movi_i32(cpu_pc, dc.pc);
         gen_exception(&dc, EXCP_DEBUG);
     }
