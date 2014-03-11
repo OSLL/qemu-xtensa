@@ -194,6 +194,77 @@ static Lx60SpiState *lx60_spi_init(MemoryRegion *address_space,
     return s;
 }
 
+typedef struct Lx60I2SState {
+    MemoryRegion iomem;
+    uint32_t start;
+    uint32_t data;
+    int64_t start_time;
+} Lx60I2SState;
+
+static void lx60_i2s_reset(void *opaque)
+{
+    Lx60I2SState *s = opaque;
+
+    s->start = 0;
+    s->data = 0;
+    s->start_time = 0;
+}
+
+static uint64_t lx60_i2s_read(void *opaque, hwaddr addr,
+        unsigned size)
+{
+    Lx60I2SState *s = opaque;
+
+    printf("%s: %08lx<%u>\n", __func__, addr, size);
+    switch (addr) {
+    case 0x0: /*start*/
+        return s->start;
+
+    case 0x4: /*busy*/
+        return qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) - s->start_time < 100000;
+    }
+    return 0;
+}
+
+static void lx60_i2s_write(void *opaque, hwaddr addr,
+        uint64_t val, unsigned size)
+{
+    Lx60I2SState *s = opaque;
+
+    printf("%s: %08lx<%u> = %08lx\n", __func__, addr, size, val);
+    switch (addr) {
+    case 0x0: /*start*/
+        if ((s->start ^ val) & 1) {
+            s->start_time = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+        }
+        s->start = val & 1;
+        break;
+
+    case 0x8: /*data*/
+        s->data = val;
+        break;
+    }
+}
+
+static const MemoryRegionOps lx60_i2s_ops = {
+    .read = lx60_i2s_read,
+    .write = lx60_i2s_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+static Lx60I2SState *lx60_i2s_init(MemoryRegion *address_space,
+        hwaddr base)
+{
+    Lx60I2SState *s = g_malloc(sizeof(Lx60I2SState));
+
+    memory_region_init_io(&s->iomem, NULL, &lx60_i2s_ops, s,
+            "lx60.i2s", 0x10000);
+    memory_region_add_subregion(address_space, base, &s->iomem);
+    lx60_i2s_reset(s);
+    qemu_register_reset(lx60_i2s_reset, s);
+    return s;
+}
+
 
 static void lx60_net_init(MemoryRegion *address_space,
         hwaddr base,
@@ -329,6 +400,7 @@ static void lx_init(const LxBoardDesc *board, MachineState *machine)
                           224 * 1024 * 1024);
     memory_region_add_subregion(system_memory, 0xf0000000, system_io);
     lx60_fpga_init(system_io, 0x0d020000);
+    lx60_i2s_init(system_io, 0x0d080000);
     lx60_spi_init(system_io, 0x0d0a0000);
     if (nd_table[0].used) {
         lx60_net_init(system_io, 0x0d030000, 0x0d030400, 0x0d800000,
