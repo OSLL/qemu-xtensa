@@ -10,3 +10,4 @@ obj-y += core-fsf.o
 obj-y += core-test_kc705_ca.o
 obj-y += core-test_kc705_be.o
 obj-y += core-dc233_xea3.o
+obj-y += core-lx106.o
