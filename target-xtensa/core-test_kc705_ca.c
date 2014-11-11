@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Max Filippov, Open Source and Linux Lab.
+ * Copyright (c) 2014, Max Filippov, Open Source and Linux Lab.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,22 +28,23 @@
 #include "cpu.h"
 #include "exec/exec-all.h"
 #include "exec/gdbstub.h"
+#include "qemu-common.h"
 #include "qemu/host-utils.h"
 
-#include "core-fsf/core-isa.h"
+#include "core-test_kc705_ca/core-isa.h"
 #include "overlay_tool.h"
 
-static const XtensaConfig fsf __attribute__((unused)) = {
-    .name = "fsf",
+static const XtensaConfig test_kc705_ca = {
+    .name = "test_kc705_ca",
     .gdb_regmap = {
-        .num_regs = 131,
-        .num_core_regs = 75,
+        .num_regs = 121,
+        .num_core_regs = 52,
         .reg = {
-#include "core-fsf/gdb-config.c"
+#include "core-test_kc705_ca/gdb-config.c"
         }
     },
-    .clock_freq_khz = 10000,
+    .clock_freq_khz = 40000,
     DEFAULT_SECTIONS
 };
 
-REGISTER_CORE(fsf)
+REGISTER_CORE(test_kc705_ca)
