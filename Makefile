@@ -351,7 +351,8 @@ s390-zipl.rom \
 s390-ccw.img \
 spapr-rtas.bin slof.bin \
 palcode-clipper \
-u-boot.e500
+u-boot.e500 \
+esp8266.rom esp8266-call-user.rom
 else
 BLOBS=
 endif
