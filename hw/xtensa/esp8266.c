@@ -41,6 +41,8 @@
 #include "qemu/error-report.h"
 #include "bootparam.h"
 
+#define DEBUG_LOG(...) fprintf(stderr, __VA_ARGS__)
+
 #define DEFINE_BITS(prefix, reg, field, shift, len) \
     prefix##_##reg##_##field##_SHIFT = shift, \
     prefix##_##reg##_##field##_LEN = len, \
@@ -446,6 +448,172 @@ static Esp8266RtcState *esp8266_rtc_init(MemoryRegion *address_space,
 
 }
 
+/* PINMUX */
+
+enum {
+    DUMMY0,
+
+    MTDI,
+    MTCK,
+    MTMS,
+    MTDO,
+    U0RXD,
+    U0TXD,
+    SD_CLK,
+    SD_DATA0,
+    SD_DATA1,
+    SD_DATA2,
+    SD_DATA3,
+    SD_CMD,
+    GPIO0,
+    GPIO2,
+    GPIO4,
+    GPIO5,
+
+    ESP8266_PINMUX_MAX,
+};
+
+typedef struct Esp8266PinmuxState {
+    MemoryRegion iomem;
+
+    uint32_t reg[ESP8266_PINMUX_MAX];
+} Esp8266PinmuxState;
+
+static uint64_t esp8266_pinmux_read(void *opaque, hwaddr addr,
+                                  unsigned size)
+{
+    Esp8266PinmuxState *s = opaque;
+
+    if (addr % 4 == 0 && size == 4 && addr / 4 < ESP8266_PINMUX_MAX) {
+        return s->reg[addr / 4];
+    }
+    return 0;
+}
+
+static unsigned esp8266_pinmux_function(uint32_t v)
+{
+    return ((v & 0x30) >> 4) | ((v & 0x100) >> 6);
+}
+
+static unsigned esp8266_pinmux_pullup(uint32_t v)
+{
+    return (v & 0x80) >> 7;
+}
+
+static unsigned esp8266_pinmux_pulldn(uint32_t v)
+{
+    return (v & 0x40) >> 6;
+}
+
+static unsigned esp8266_pinmux_oe(uint32_t v)
+{
+    return v & 0x1;
+}
+
+static void esp8266_pinmux_write(void *opaque, hwaddr addr,
+                               uint64_t val, unsigned size)
+{
+#define DEF_PINMUX_PIN(f0, f1, f2, f3, f4) \
+    { .fn = {#f0, #f1, #f2, #f3, #f4} }
+    static const struct {
+        const char * const fn[5];
+    } pin[] = {
+        {},
+        DEF_PINMUX_PIN(MTDI,        I2SI_DATA,  HSPIQ,      GPIO12, U0DTR),
+        DEF_PINMUX_PIN(MTCK,        I2SI_BCK,   HSPID,      GPIO13, U0CTS),
+        DEF_PINMUX_PIN(MTMS,        I2SI_WS,    HSPICLK,    GPIO14, U0DSR),
+        DEF_PINMUX_PIN(MTDO,        I2SO_BCK,   HSPICS,     GPIO15, U0RTS),
+        DEF_PINMUX_PIN(U0RXD,       I2SO_DATA,  ,           GPIO3,  CLK_XTAL),
+        DEF_PINMUX_PIN(U0TXD,       SPICS1,     ,           GPIO1,  CLK_RTC),
+        DEF_PINMUX_PIN(SD_CLK,      SPI_CLK,    ,           GPIO6,  U1CTS),
+        DEF_PINMUX_PIN(SD_DATA0,    SPIQ,       ,           GPIO7,  U1TXD),
+        DEF_PINMUX_PIN(SD_DATA1,    SPID,       ,           GPIO8,  U1RXD),
+        DEF_PINMUX_PIN(SD_DATA2,    SPIHD,      ,           GPIO9,  HSPIHD),
+        DEF_PINMUX_PIN(SD_DATA3,    SPIWP,      ,           GPIO10, HSPIWP),
+        DEF_PINMUX_PIN(SD_CMD,      SPICS0,     ,           GPIO11, U1RTS),
+        DEF_PINMUX_PIN(GPIO0,       SPICS2,     ,           ,       CLK_OUT),
+        DEF_PINMUX_PIN(GPIO2,       I2SOWS,     U1TXD,      ,       U0TXD),
+        DEF_PINMUX_PIN(GPIO4,       CLK_XTAL,   ,           ,       ),
+        DEF_PINMUX_PIN(GPIO5,       CLK_RTC,    ,           ,       ),
+    };
+    Esp8266PinmuxState *s = opaque;
+    unsigned i = addr / 4;
+
+    if (addr < 4 || addr / 4 >= ESP8266_PINMUX_MAX || addr % 4 || size != 4) {
+        return;
+    }
+
+    if ((s->reg[i] ^ val) & 0x1f1) {
+        DEBUG_LOG("%s: ", pin[i].fn[0]);
+        if (esp8266_pinmux_function(s->reg[i]) != esp8266_pinmux_function(val)) {
+            DEBUG_LOG("[%s -> %s]",
+                pin[i].fn[esp8266_pinmux_function(s->reg[i])],
+                pin[i].fn[esp8266_pinmux_function(val)]);
+        }
+        if (esp8266_pinmux_oe(s->reg[i]) != esp8266_pinmux_oe(val)) {
+            DEBUG_LOG("[oe: %d -> %d]",
+                    esp8266_pinmux_oe(s->reg[i]),
+                    esp8266_pinmux_oe(val));
+        }
+        if (esp8266_pinmux_pullup(s->reg[i]) != esp8266_pinmux_pullup(val)) {
+            DEBUG_LOG("[pullup: %d -> %d]",
+                    esp8266_pinmux_pullup(s->reg[i]),
+                    esp8266_pinmux_pullup(val));
+        }
+        if (esp8266_pinmux_pulldn(s->reg[i]) != esp8266_pinmux_pulldn(val)) {
+            DEBUG_LOG("[pulldn: %d -> %d]",
+                    esp8266_pinmux_pulldn(s->reg[i]),
+                    esp8266_pinmux_pulldn(val));
+        }
+        DEBUG_LOG("\n");
+    }
+
+    s->reg[i] = val;
+}
+
+static const MemoryRegionOps esp8266_pinmux_ops = {
+    .read = esp8266_pinmux_read,
+    .write = esp8266_pinmux_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+static void esp8266_pinmux_reset(void *opaque)
+{
+    Esp8266PinmuxState *s = opaque;
+    static const uint32_t reset_reg[] = {
+        0x00000080,
+        0x00000080,
+        0x00000080,
+        0x00000080,
+        0x00000080,
+        0x00000000,
+        0x00000010,
+        0x00000010,
+        0x00000010,
+        0x00000010,
+        0x00000010,
+        0x00000010,
+        0x00000080,
+        0x000000a0,
+        0x00000000,
+        0x00000000,
+    };
+
+    memcpy(s->reg, reset_reg, sizeof(s->reg));
+}
+
+static Esp8266PinmuxState *esp8266_pinmux_init(MemoryRegion *address_space,
+                                           hwaddr base)
+{
+    Esp8266PinmuxState *s = g_malloc(sizeof(Esp8266PinmuxState));
+
+    memory_region_init_io(&s->iomem, NULL, &esp8266_pinmux_ops, s,
+                          "esp8266.pinmux", 0x100);
+    memory_region_add_subregion(address_space, base, &s->iomem);
+    qemu_register_reset(esp8266_pinmux_reset, s);
+    return s;
+}
+
 static uint64_t translate_phys_addr(void *opaque, uint64_t addr)
 {
     XtensaCPU *cpu = opaque;
@@ -536,6 +704,7 @@ static void xtensa_esp8266_init(MachineState *machine)
                         xtensa_get_extint(env, 5), serial_hds[0]);
     esp8266_gpio_init(system_io, 0x00000300);
     esp8266_rtc_init(system_io, 0x00000700);
+    esp8266_pinmux_init(system_io, 0x00000800);
 
 
     /* Use presence of kernel file name as 'boot from SRAM' switch. */
