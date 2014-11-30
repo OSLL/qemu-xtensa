@@ -301,7 +301,8 @@ static const MemoryRegionOps esp8266_serial_ops = {
 };
 
 static Esp8266SerialState *esp8266_serial_init(MemoryRegion *address_space,
-                                               hwaddr base, qemu_irq irq,
+                                               hwaddr base, const char *name,
+                                               qemu_irq irq,
                                                CharDriverState *chr)
 {
     Esp8266SerialState *s = g_malloc(sizeof(Esp8266SerialState));
@@ -311,7 +312,7 @@ static Esp8266SerialState *esp8266_serial_init(MemoryRegion *address_space,
     qemu_chr_add_handlers(s->chr, esp8266_serial_can_receive,
                           esp8266_serial_receive, NULL, s);
     memory_region_init_io(&s->iomem, NULL, &esp8266_serial_ops, s,
-                          "esp8266.serial", 0x300);
+                          name, 0x100);
     memory_region_add_subregion(address_space, base, &s->iomem);
     qemu_register_reset(esp8266_serial_reset, s);
     return s;
@@ -531,8 +532,8 @@ static void xtensa_esp8266_init(MachineState *machine)
     if (!serial_hds[0]) {
         serial_hds[0] = qemu_chr_new("serial0", "null", NULL);
     }
-    esp8266_serial_init(system_io, 0x00000000, xtensa_get_extint(env, 5),
-                        serial_hds[0]);
+    esp8266_serial_init(system_io, 0x00000000, "esp8266.uart0",
+                        xtensa_get_extint(env, 5), serial_hds[0]);
     esp8266_gpio_init(system_io, 0x00000300);
     esp8266_rtc_init(system_io, 0x00000700);
 
