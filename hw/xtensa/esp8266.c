@@ -320,6 +320,136 @@ static Esp8266SerialState *esp8266_serial_init(MemoryRegion *address_space,
     return s;
 }
 
+/* SPI */
+
+enum {
+    ESP8266_SPI_FLASH_CMD,
+    ESP8266_SPI_FLASH_ADDR,
+    ESP8266_SPI_FLASH_CTRL,
+    ESP8266_SPI_FLASH_CTRL1,
+    ESP8266_SPI_FLASH_STATUS,
+    ESP8266_SPI_FLASH_CTRL2,
+    ESP8266_SPI_FLASH_CLOCK,
+    ESP8266_SPI_FLASH_USER,
+    ESP8266_SPI_FLASH_USER1,
+    ESP8266_SPI_FLASH_USER2,
+    ESP8266_SPI_FLASH_USER3,
+    ESP8266_SPI_FLASH_PIN,
+    ESP8266_SPI_FLASH_SLAVE,
+    ESP8266_SPI_FLASH_SLAVE1,
+    ESP8266_SPI_FLASH_SLAVE2,
+    ESP8266_SPI_FLASH_SLAVE3,
+    ESP8266_SPI_FLASH_C0,
+    ESP8266_SPI_FLASH_C1,
+    ESP8266_SPI_FLASH_C2,
+    ESP8266_SPI_FLASH_C3,
+    ESP8266_SPI_FLASH_C4,
+    ESP8266_SPI_FLASH_C5,
+    ESP8266_SPI_FLASH_C6,
+    ESP8266_SPI_FLASH_C7,
+
+    ESP8266_SPI_FLASH_EXT0 = 0x3c,
+    ESP8266_SPI_FLASH_EXT1,
+    ESP8266_SPI_FLASH_EXT2,
+    ESP8266_SPI_FLASH_EXT3,
+    ESP8266_SPI_MAX,
+};
+
+#define ESP8266_SPI_FLASH_BITS(reg, field, shift, len) \
+    DEFINE_BITS(ESP8266_SPI_FLASH, reg, field, shift, len)
+
+enum {
+    ESP8266_SPI_FLASH_BITS(CMD, WRDI, 29, 1),
+    ESP8266_SPI_FLASH_BITS(CMD, WREN, 30, 1),
+};
+
+enum {
+    ESP8266_SPI_FLASH_BITS(STATUS, BUSY, 0, 1),
+    ESP8266_SPI_FLASH_BITS(STATUS, WRENABLE, 1, 1),
+};
+
+typedef struct Esp8266SpiState {
+    MemoryRegion iomem;
+    qemu_irq irq;
+
+    uint32_t reg[ESP8266_SPI_MAX];
+} Esp8266SpiState;
+
+static uint64_t esp8266_spi_read(void *opaque, hwaddr addr, unsigned size)
+{
+    Esp8266SpiState *s = opaque;
+
+    DEBUG_LOG("%s: +0x%02x: ", __func__, (uint32_t)addr);
+    if (addr / 4 >= ESP8266_SPI_MAX || addr % 4 || size != 4) {
+        DEBUG_LOG("0\n");
+        return 0;
+    }
+    DEBUG_LOG("0x%08x\n", s->reg[addr / 4]);
+    return s->reg[addr / 4];
+}
+
+static void esp8266_spi_cmd(Esp8266SpiState *s, hwaddr addr,
+                            uint64_t val, unsigned size)
+{
+    if (val & ESP8266_SPI_FLASH_CMD_WRDI) {
+        s->reg[ESP8266_SPI_FLASH_STATUS] &= ~ESP8266_SPI_FLASH_STATUS_WRENABLE;
+    }
+    if (val & ESP8266_SPI_FLASH_CMD_WREN) {
+        s->reg[ESP8266_SPI_FLASH_STATUS] |= ESP8266_SPI_FLASH_STATUS_WRENABLE;
+    }
+}
+
+static void esp8266_spi_write(void *opaque, hwaddr addr, uint64_t val,
+                              unsigned size)
+{
+    Esp8266SpiState *s = opaque;
+    static void (* const handler[])(Esp8266SpiState *s, hwaddr addr,
+                                    uint64_t val, unsigned size) = {
+        [ESP8266_SPI_FLASH_CMD] = esp8266_spi_cmd,
+    };
+
+    DEBUG_LOG("%s: +0x%02x = 0x%08x\n",
+            __func__, (uint32_t)addr, (uint32_t)val);
+    if (addr / 4 >= ARRAY_SIZE(handler) || addr % 4 || size != 4) {
+        return;
+    }
+    if (handler[addr / 4]) {
+        handler[addr / 4](s, addr, val, size);
+    } else {
+        s->reg[addr / 4] = val;
+    }
+}
+
+static void esp8266_spi_reset(void *opaque)
+{
+    Esp8266SpiState *s = opaque;
+
+    memset(s->reg, 0, sizeof(s->reg));
+
+    //esp8266_spi_irq_update(s);
+}
+
+static const MemoryRegionOps esp8266_spi_ops = {
+    .read = esp8266_spi_read,
+    .write = esp8266_spi_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+static Esp8266SpiState *esp8266_spi_init(MemoryRegion *address_space,
+					 hwaddr base, const char *name,
+					 qemu_irq irq)
+{
+    Esp8266SpiState *s = g_malloc(sizeof(Esp8266SpiState));
+
+    s->irq = irq;
+    memory_region_init_io(&s->iomem, NULL, &esp8266_spi_ops, s,
+                          name, 0x100);
+    memory_region_add_subregion(address_space, base, &s->iomem);
+    qemu_register_reset(esp8266_spi_reset, s);
+    return s;
+}
+
+
 /* GPIO */
 
 #define ESP8266_GPIO_STRAP_SD_START     (0x4 << 16)
@@ -702,6 +832,8 @@ static void xtensa_esp8266_init(MachineState *machine)
     }
     esp8266_serial_init(system_io, 0x00000000, "esp8266.uart0",
                         xtensa_get_extint(env, 5), serial_hds[0]);
+    esp8266_spi_init(system_io, 0x0000200, "esp8266.spi0",
+                     xtensa_get_extint(env, 6));
     esp8266_gpio_init(system_io, 0x00000300);
     esp8266_rtc_init(system_io, 0x00000700);
     esp8266_pinmux_init(system_io, 0x00000800);
