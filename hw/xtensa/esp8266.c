@@ -267,11 +267,11 @@ static void esp8266_serial_write(void *opaque, hwaddr addr,
         [ESP8266_UART_RXD_CNT] = esp8266_serial_ro,
     };
 
-    if ((addr & 3) || size != 4 || addr / 4 >= ARRAY_SIZE(handler)) {
+    if ((addr & 3) || size != 4 || addr / 4 >= ESP8266_UART_MAX) {
         return;
     }
 
-    if (handler[addr / 4]) {
+    if (addr / 4 < ARRAY_SIZE(handler) && handler[addr / 4]) {
         handler[addr / 4](s, addr, val, size);
     } else {
         s->reg[addr / 4] = val;
@@ -410,10 +410,10 @@ static void esp8266_spi_write(void *opaque, hwaddr addr, uint64_t val,
 
     DEBUG_LOG("%s: +0x%02x = 0x%08x\n",
             __func__, (uint32_t)addr, (uint32_t)val);
-    if (addr / 4 >= ARRAY_SIZE(handler) || addr % 4 || size != 4) {
+    if (addr / 4 >= ESP8266_SPI_MAX || addr % 4 || size != 4) {
         return;
     }
-    if (handler[addr / 4]) {
+    if (addr / 4 < ARRAY_SIZE(handler) && handler[addr / 4]) {
         handler[addr / 4](s, addr, val, size);
     } else {
         s->reg[addr / 4] = val;
