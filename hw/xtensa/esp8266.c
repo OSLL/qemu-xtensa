@@ -355,12 +355,31 @@ enum {
     ESP8266_SPI_MAX,
 };
 
+#define ESP8266_MAX_FLASH_SZ (1 << 24)
+
 #define ESP8266_SPI_FLASH_BITS(reg, field, shift, len) \
     DEFINE_BITS(ESP8266_SPI_FLASH, reg, field, shift, len)
 
+#define ESP8266_SPI_GET_VAL(v, _reg, _field) \
+    extract32(v, \
+              ESP8266_SPI_FLASH_##_reg##_##_field##_SHIFT, \
+              ESP8266_SPI_FLASH_##_reg##_##_field##_LEN)
+
+#define ESP8266_SPI_GET(s, _reg, _field) \
+    extract32(s->reg[ESP8266_SPI_FLASH_##_reg], \
+              ESP8266_SPI_FLASH_##_reg##_##_field##_SHIFT, \
+              ESP8266_SPI_FLASH_##_reg##_##_field##_LEN)
+
 enum {
+    ESP8266_SPI_FLASH_BITS(CMD, USR, 18, 1),
     ESP8266_SPI_FLASH_BITS(CMD, WRDI, 29, 1),
     ESP8266_SPI_FLASH_BITS(CMD, WREN, 30, 1),
+    ESP8266_SPI_FLASH_BITS(CMD, READ, 31, 1),
+};
+
+enum {
+    ESP8266_SPI_FLASH_BITS(ADDR, OFFSET, 0, 24),
+    ESP8266_SPI_FLASH_BITS(ADDR, LENGTH, 24, 8),
 };
 
 enum {
@@ -368,9 +387,27 @@ enum {
     ESP8266_SPI_FLASH_BITS(STATUS, WRENABLE, 1, 1),
 };
 
+enum {
+    ESP8266_SPI_FLASH_BITS(CLOCK, CLKCNT_L, 0, 6),
+    ESP8266_SPI_FLASH_BITS(CLOCK, CLKCNT_H, 6, 6),
+    ESP8266_SPI_FLASH_BITS(CLOCK, CLKCNT_N, 12, 6),
+    ESP8266_SPI_FLASH_BITS(CLOCK, CLK_DIV_PRE, 18, 13),
+    ESP8266_SPI_FLASH_BITS(CLOCK, CLK_EQU_SYSCLK, 31, 1),
+};
+
+enum {
+    ESP8266_SPI_FLASH_BITS(USER, FLASH_MODE, 2, 1),
+};
+
+enum {
+    ESP8266_SPI_FLASH_BITS(USER2, COMMAND_VALUE, 0, 16),
+    ESP8266_SPI_FLASH_BITS(USER2, COMMAND_BITLEN, 28, 4),
+};
+
 typedef struct Esp8266SpiState {
     MemoryRegion iomem;
     qemu_irq irq;
+    void *flash_image;
 
     uint32_t reg[ESP8266_SPI_MAX];
 } Esp8266SpiState;
@@ -391,12 +428,49 @@ static uint64_t esp8266_spi_read(void *opaque, hwaddr addr, unsigned size)
 static void esp8266_spi_cmd(Esp8266SpiState *s, hwaddr addr,
                             uint64_t val, unsigned size)
 {
+    if (val & ESP8266_SPI_FLASH_CMD_READ) {
+        if (ESP8266_SPI_GET(s, USER, FLASH_MODE)) {
+            DEBUG_LOG("%s: READ FLASH 0x%02x@0x%08x\n",
+                      __func__,
+                      ESP8266_SPI_GET(s, ADDR, LENGTH),
+                      ESP8266_SPI_GET(s, ADDR, OFFSET));
+            memcpy(s->reg + ESP8266_SPI_FLASH_C0,
+                   s->flash_image + ESP8266_SPI_GET(s, ADDR, OFFSET),
+                   (ESP8266_SPI_GET(s, ADDR, LENGTH) + 3) & 0x3c);
+        } else {
+            DEBUG_LOG("%s: READ ?????\n", __func__);
+        }
+    }
     if (val & ESP8266_SPI_FLASH_CMD_WRDI) {
         s->reg[ESP8266_SPI_FLASH_STATUS] &= ~ESP8266_SPI_FLASH_STATUS_WRENABLE;
     }
     if (val & ESP8266_SPI_FLASH_CMD_WREN) {
         s->reg[ESP8266_SPI_FLASH_STATUS] |= ESP8266_SPI_FLASH_STATUS_WRENABLE;
     }
+    if (val & ESP8266_SPI_FLASH_CMD_USR) {
+        DEBUG_LOG("%s: TX %04x[%d bits]\n",
+                  __func__,
+                  ESP8266_SPI_GET(s, USER2, COMMAND_VALUE),
+                  ESP8266_SPI_GET(s, USER2, COMMAND_BITLEN));
+    }
+}
+
+static void esp8266_spi_status(Esp8266SpiState *s, hwaddr addr,
+                               uint64_t val, unsigned size)
+{
+}
+
+static void esp8266_spi_clock(Esp8266SpiState *s, hwaddr addr,
+                              uint64_t val, unsigned size)
+{
+    DEBUG_LOG("%s: L: %d, H: %d, N: %d, PRE: %d, SYSCLK: %d\n",
+              __func__,
+              ESP8266_SPI_GET_VAL(val, CLOCK, CLKCNT_L),
+              ESP8266_SPI_GET_VAL(val, CLOCK, CLKCNT_H),
+              ESP8266_SPI_GET_VAL(val, CLOCK, CLKCNT_N),
+              ESP8266_SPI_GET_VAL(val, CLOCK, CLK_DIV_PRE),
+              ESP8266_SPI_GET_VAL(val, CLOCK, CLK_EQU_SYSCLK));
+    s->reg[ESP8266_SPI_FLASH_CLOCK] = val;
 }
 
 static void esp8266_spi_write(void *opaque, hwaddr addr, uint64_t val,
@@ -406,6 +480,8 @@ static void esp8266_spi_write(void *opaque, hwaddr addr, uint64_t val,
     static void (* const handler[])(Esp8266SpiState *s, hwaddr addr,
                                     uint64_t val, unsigned size) = {
         [ESP8266_SPI_FLASH_CMD] = esp8266_spi_cmd,
+        [ESP8266_SPI_FLASH_STATUS] = esp8266_spi_status,
+        [ESP8266_SPI_FLASH_CLOCK] = esp8266_spi_clock,
     };
 
     DEBUG_LOG("%s: +0x%02x = 0x%08x\n",
@@ -437,11 +513,12 @@ static const MemoryRegionOps esp8266_spi_ops = {
 
 static Esp8266SpiState *esp8266_spi_init(MemoryRegion *address_space,
 					 hwaddr base, const char *name,
-					 qemu_irq irq)
+					 qemu_irq irq, void *flash_image)
 {
     Esp8266SpiState *s = g_malloc(sizeof(Esp8266SpiState));
 
     s->irq = irq;
+    s->flash_image = flash_image;
     memory_region_init_io(&s->iomem, NULL, &esp8266_spi_ops, s,
                           name, 0x100);
     memory_region_add_subregion(address_space, base, &s->iomem);
@@ -791,6 +868,7 @@ static void xtensa_esp8266_init(MachineState *machine)
     QemuOpts *machine_opts = qemu_get_machine_opts();
     const char *cpu_model = machine->cpu_model;
     const char *kernel_filename = qemu_opt_get(machine_opts, "kernel");
+    void *flash_image = malloc(ESP8266_MAX_FLASH_SZ);
     int n;
 
     if (!cpu_model) {
@@ -833,7 +911,7 @@ static void xtensa_esp8266_init(MachineState *machine)
     esp8266_serial_init(system_io, 0x00000000, "esp8266.uart0",
                         xtensa_get_extint(env, 5), serial_hds[0]);
     esp8266_spi_init(system_io, 0x0000200, "esp8266.spi0",
-                     xtensa_get_extint(env, 6));
+                     xtensa_get_extint(env, 6), flash_image);
     esp8266_gpio_init(system_io, 0x00000300);
     esp8266_rtc_init(system_io, 0x00000700);
     esp8266_pinmux_init(system_io, 0x00000800);
