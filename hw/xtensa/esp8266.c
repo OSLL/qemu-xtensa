@@ -925,12 +925,21 @@ static void xtensa_esp8266_init(MachineState *machine)
                 &elf_entry, &elf_lowaddr, NULL, be, ELF_MACHINE, 0);
         if (success > 0) {
             user_entry = elf_entry;
+            rom_filename = "esp8266-call-user.rom";
         } else {
-            error_report("could not load kernel '%s'\n",
-                         kernel_filename);
-            exit(EXIT_FAILURE);
+            int fd = open(kernel_filename, O_RDONLY);
+
+            if (fd < 0) {
+                error_report("could not load kernel '%s'\n",
+                             kernel_filename);
+                exit(EXIT_FAILURE);
+            } else {
+                if (read(fd, flash_image, ESP8266_MAX_FLASH_SZ) < 0) {
+                    DEBUG_LOG("%s: couldn't load flash image\n", __func__);
+                }
+                close(fd);
+            }
         }
-        rom_filename = "esp8266-call-user.rom";
     }
 
     rom_filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, rom_filename);
