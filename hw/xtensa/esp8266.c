@@ -641,6 +641,9 @@ static uint64_t esp8266_rtc_read(void *opaque, hwaddr addr,
     case 0x18: /*?*/
         return 5;
 
+    case 0x28: /*?*/
+        return 1;
+
     default:
         fprintf(stderr, "%s, %x\n", __func__, (uint32_t)addr);
         break;
@@ -653,6 +656,8 @@ static void esp8266_rtc_write(void *opaque, hwaddr addr,
 {
     //Esp8266RtcState *s = opaque;
 
+    DEBUG_LOG("%s: +0x%02x: %08x\n",
+              __func__, (uint32_t)addr, (uint32_t)val);
     switch (addr) {
     }
 }
