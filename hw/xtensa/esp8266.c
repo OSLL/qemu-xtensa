@@ -851,6 +851,7 @@ static Esp8266PinmuxState *esp8266_pinmux_init(MemoryRegion *address_space,
 
 enum {
     ESP8266_DPORT_SPI = 0x3,
+    ESP8266_DPORT_MACADDR = 0x14,
     ESP8266_DPORT_MAX = 0x40,
 };
 
@@ -913,6 +914,9 @@ static void esp8266_dport_reset(void *opaque)
 {
     Esp8266DportState *s = opaque;
     memset(s->reg, 0, sizeof(s->reg));
+    s->reg[ESP8266_DPORT_MACADDR + 0] = 0x01234567;
+    s->reg[ESP8266_DPORT_MACADDR + 1] = 0x89abcdef;
+    s->reg[ESP8266_DPORT_MACADDR + 2] = 0x00008000;
 }
 
 static Esp8266DportState *esp8266_dport_init(MemoryRegion *address_space,
