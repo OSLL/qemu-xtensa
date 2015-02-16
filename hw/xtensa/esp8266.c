@@ -383,6 +383,10 @@ enum {
 };
 
 enum {
+    ESP8266_SPI_FLASH_BITS(CTRL, ENABLE_AHB, 17, 1),
+};
+
+enum {
     ESP8266_SPI_FLASH_BITS(STATUS, BUSY, 0, 1),
     ESP8266_SPI_FLASH_BITS(STATUS, WRENABLE, 1, 1),
 };
@@ -406,6 +410,7 @@ enum {
 
 typedef struct Esp8266SpiState {
     MemoryRegion iomem;
+    MemoryRegion cache;
     qemu_irq irq;
     void *flash_image;
 
@@ -455,6 +460,14 @@ static void esp8266_spi_cmd(Esp8266SpiState *s, hwaddr addr,
     }
 }
 
+static void esp8266_spi_write_ctrl(Esp8266SpiState *s, hwaddr addr,
+                                   uint64_t val, unsigned size)
+{
+    s->reg[ESP8266_SPI_FLASH_CTRL] = val;
+    memory_region_set_enabled(&s->cache,
+                              val & ESP8266_SPI_FLASH_CTRL_ENABLE_AHB);
+}
+
 static void esp8266_spi_status(Esp8266SpiState *s, hwaddr addr,
                                uint64_t val, unsigned size)
 {
@@ -480,6 +493,7 @@ static void esp8266_spi_write(void *opaque, hwaddr addr, uint64_t val,
     static void (* const handler[])(Esp8266SpiState *s, hwaddr addr,
                                     uint64_t val, unsigned size) = {
         [ESP8266_SPI_FLASH_CMD] = esp8266_spi_cmd,
+        [ESP8266_SPI_FLASH_CTRL] = esp8266_spi_write_ctrl,
         [ESP8266_SPI_FLASH_STATUS] = esp8266_spi_status,
         [ESP8266_SPI_FLASH_CLOCK] = esp8266_spi_clock,
     };
@@ -501,6 +515,7 @@ static void esp8266_spi_reset(void *opaque)
     Esp8266SpiState *s = opaque;
 
     memset(s->reg, 0, sizeof(s->reg));
+    memory_region_set_enabled(&s->cache, false);
 
     //esp8266_spi_irq_update(s);
 }
@@ -512,16 +527,27 @@ static const MemoryRegionOps esp8266_spi_ops = {
 };
 
 static Esp8266SpiState *esp8266_spi_init(MemoryRegion *address_space,
-					 hwaddr base, const char *name,
-					 qemu_irq irq, void *flash_image)
+                                         hwaddr base, const char *name,
+                                         MemoryRegion *cache_space,
+                                         hwaddr cache_base,
+                                         const char *cache_name,
+                                         qemu_irq irq, void **flash_image)
 {
     Esp8266SpiState *s = g_malloc(sizeof(Esp8266SpiState));
 
     s->irq = irq;
-    s->flash_image = flash_image;
     memory_region_init_io(&s->iomem, NULL, &esp8266_spi_ops, s,
                           name, 0x100);
+    memory_region_init_rom_device(&s->cache, NULL, NULL, s,
+                                  cache_name, ESP8266_MAX_FLASH_SZ,
+                                  NULL);
+    s->flash_image = memory_region_get_ram_ptr(&s->cache);
+    if (flash_image) {
+        *flash_image = s->flash_image;
+    }
     memory_region_add_subregion(address_space, base, &s->iomem);
+    memory_region_add_subregion(cache_space, cache_base, &s->cache);
+    memory_region_set_enabled(&s->cache, false);
     qemu_register_reset(esp8266_spi_reset, s);
     return s;
 }
@@ -821,6 +847,88 @@ static Esp8266PinmuxState *esp8266_pinmux_init(MemoryRegion *address_space,
     return s;
 }
 
+/* DPORT area */
+
+enum {
+    ESP8266_DPORT_SPI = 0x3,
+    ESP8266_DPORT_MAX = 0x40,
+};
+
+typedef struct Esp8266DportState {
+    MemoryRegion iomem;
+    Esp8266SpiState *spi;
+
+    uint32_t reg[ESP8266_DPORT_MAX];
+} Esp8266DportState;
+
+static uint64_t esp8266_dport_read(void *opaque, hwaddr addr,
+                                   unsigned size)
+{
+    Esp8266DportState *s = opaque;
+
+    DEBUG_LOG("%s: +0x%02x: 0x%08x\n",
+              __func__, (uint32_t)addr % (ESP8266_DPORT_MAX * 4),
+              s->reg[(addr / 4) % ESP8266_DPORT_MAX]);
+    return s->reg[(addr / 4) % ESP8266_DPORT_MAX];
+}
+
+static void esp8266_dport_write_spi(Esp8266DportState *s, hwaddr addr,
+                                    uint64_t val, unsigned size)
+{
+    s->reg[ESP8266_DPORT_SPI] = val;
+    if (val & 1) {
+        s->reg[ESP8266_DPORT_SPI] |= 2;
+    }
+}
+
+static void esp8266_dport_write(void *opaque, hwaddr addr,
+                                uint64_t val, unsigned size)
+{
+    Esp8266DportState *s = opaque;
+    static void (* const handler[])(Esp8266DportState *s, hwaddr addr,
+                                    uint64_t val, unsigned size) = {
+        [ESP8266_DPORT_SPI] = esp8266_dport_write_spi,
+    };
+
+    DEBUG_LOG("%s: +0x%02x = 0x%08x\n",
+              __func__, (uint32_t)addr % (ESP8266_DPORT_MAX * 4),
+              (uint32_t)val);
+    if (addr % 4 || size != 4) {
+        return;
+    }
+    if (addr / 4 < ARRAY_SIZE(handler) && handler[addr / 4]) {
+        handler[addr / 4](s, addr, val, size);
+    } else {
+        s->reg[(addr / 4) % ESP8266_DPORT_MAX] = val;
+    }
+}
+
+static const MemoryRegionOps esp8266_dport_ops = {
+    .read = esp8266_dport_read,
+    .write = esp8266_dport_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+static void esp8266_dport_reset(void *opaque)
+{
+    Esp8266DportState *s = opaque;
+    memset(s->reg, 0, sizeof(s->reg));
+}
+
+static Esp8266DportState *esp8266_dport_init(MemoryRegion *address_space,
+                                             hwaddr base, Esp8266SpiState *spi)
+{
+    Esp8266DportState *s = g_malloc(sizeof(Esp8266DportState));
+
+    s->spi = spi;
+    memory_region_init_io(&s->iomem, NULL, &esp8266_dport_ops, s,
+                          "esp8266.dport", 0x10000);
+    memory_region_add_subregion(address_space, base, &s->iomem);
+    qemu_register_reset(esp8266_dport_reset, s);
+    return s;
+}
+
+
 static uint64_t translate_phys_addr(void *opaque, uint64_t addr)
 {
     XtensaCPU *cpu = opaque;
@@ -868,7 +976,8 @@ static void xtensa_esp8266_init(MachineState *machine)
     QemuOpts *machine_opts = qemu_get_machine_opts();
     const char *cpu_model = machine->cpu_model;
     const char *kernel_filename = qemu_opt_get(machine_opts, "kernel");
-    void *flash_image = malloc(ESP8266_MAX_FLASH_SZ);
+    Esp8266SpiState *spi;
+    void *flash_image;
     int n;
 
     if (!cpu_model) {
@@ -894,10 +1003,10 @@ static void xtensa_esp8266_init(MachineState *machine)
     }
 
     ram = g_malloc(sizeof(*ram));
-    memory_region_init_ram(ram, NULL, "esp8266.dram", 0x00400000,
+    memory_region_init_ram(ram, NULL, "esp8266.dram", 0x002f0000,
                            &error_abort);
     vmstate_register_ram_global(ram);
-    memory_region_add_subregion(system_memory, 0x3ff00000, ram);
+    memory_region_add_subregion(system_memory, 0x3ff10000, ram);
 
     system_io = g_malloc(sizeof(*system_io));
     memory_region_init_io(system_io, NULL, &esp8266_io_ops, NULL, "esp8266.io",
@@ -910,12 +1019,14 @@ static void xtensa_esp8266_init(MachineState *machine)
     }
     esp8266_serial_init(system_io, 0x00000000, "esp8266.uart0",
                         xtensa_get_extint(env, 5), serial_hds[0]);
-    esp8266_spi_init(system_io, 0x0000200, "esp8266.spi0",
-                     xtensa_get_extint(env, 6), flash_image);
+    spi = esp8266_spi_init(system_io, 0x0000200, "esp8266.spi0",
+                           system_memory, 0x40200000, "esp8266.flash",
+                           xtensa_get_extint(env, 6), &flash_image);
     esp8266_gpio_init(system_io, 0x00000300);
     esp8266_rtc_init(system_io, 0x00000700);
     esp8266_pinmux_init(system_io, 0x00000800);
 
+    esp8266_dport_init(system_memory, 0x3ff00000, spi);
 
     /* Use presence of kernel file name as 'boot from SRAM' switch. */
     if (kernel_filename) {
