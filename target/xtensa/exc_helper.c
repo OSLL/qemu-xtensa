@@ -36,6 +36,12 @@ void HELPER(exception)(CPUXtensaState *env, uint32_t excp)
 {
     CPUState *cs = CPU(xtensa_env_get_cpu(env));
 
+    xtensa_trace(env, XTENSA_TRACE_EXCEPTION, excp);
+    xtensa_trace(env, XTENSA_TRACE_PS, env->sregs[PS]);
+    xtensa_trace(env, XTENSA_TRACE_EXCCAUSE, env->sregs[EXCCAUSE]);
+    xtensa_trace(env, XTENSA_TRACE_EPC, env->pc);
+    xtensa_trace_registers(env);
+
     cs->exception_index = excp;
     if (excp == EXCP_YIELD) {
         env->yield_needed = 0;
@@ -50,6 +56,7 @@ void HELPER(exception_cause)(CPUXtensaState *env, uint32_t pc, uint32_t cause)
 {
     uint32_t vector;
 
+    xtensa_trace(env, XTENSA_TRACE_PS, env->sregs[PS]);
     env->pc = pc;
     if (env->sregs[PS] & PS_EXCM) {
         if (env->config->ndepc) {
@@ -72,6 +79,7 @@ void HELPER(exception_cause)(CPUXtensaState *env, uint32_t pc, uint32_t cause)
 void HELPER(exception_cause_vaddr)(CPUXtensaState *env,
                                    uint32_t pc, uint32_t cause, uint32_t vaddr)
 {
+    xtensa_trace(env, XTENSA_TRACE_EXCVADDR, vaddr);
     env->sregs[EXCVADDR] = vaddr;
     HELPER(exception_cause)(env, pc, cause);
 }

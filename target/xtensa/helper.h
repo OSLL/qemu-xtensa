@@ -63,3 +63,6 @@ DEF_HELPER_4(ule_s, void, env, i32, f32, f32)
 
 DEF_HELPER_2(rer, i32, env, i32)
 DEF_HELPER_3(wer, void, env, i32, i32)
+
+DEF_HELPER_2(trace, void, env, i32)
+DEF_HELPER_2(trace_threadptr, void, env, i32)

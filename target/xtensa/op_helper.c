@@ -169,7 +169,19 @@ uint32_t HELPER(rer)(CPUXtensaState *env, uint32_t addr)
 void HELPER(wer)(CPUXtensaState *env, uint32_t data, uint32_t addr)
 {
 #ifndef CONFIG_USER_ONLY
+    xtensa_trace(env, XTENSA_TRACE_WER_ADDR, addr);
+    xtensa_trace(env, XTENSA_TRACE_WER_DATA, data);
     address_space_stl(env->address_space_er, addr, data,
                       MEMTXATTRS_UNSPECIFIED, NULL);
 #endif
+}
+
+void HELPER(trace)(CPUXtensaState *env, uint32_t pc)
+{
+    xtensa_trace(env, XTENSA_TRACE_PC, pc);
+}
+
+void HELPER(trace_threadptr)(CPUXtensaState *env, uint32_t threadptr)
+{
+    xtensa_trace(env, XTENSA_TRACE_THREADPTR, threadptr);
 }

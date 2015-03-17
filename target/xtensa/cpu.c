@@ -88,6 +88,8 @@ static void xtensa_cpu_reset(CPUState *s)
     reset_mmu(env);
     s->halted = env->runstall;
 #endif
+    memset(env->trace_buf, 0, sizeof(env->trace_buf));
+    env->trace_idx = ~0;
 }
 
 static ObjectClass *xtensa_cpu_class_by_name(const char *cpu_model)

@@ -50,6 +50,7 @@ void HELPER(wsr_rasid)(CPUXtensaState *env, uint32_t v)
     v = (v & 0xffffff00) | 0x1;
     if (v != env->sregs[RASID]) {
         env->sregs[RASID] = v;
+        xtensa_trace(env, XTENSA_TRACE_RASID, v);
         tlb_flush(CPU(cpu));
     }
 }
@@ -251,6 +252,8 @@ void HELPER(itlb)(CPUXtensaState *env, uint32_t v, uint32_t dtlb)
         if (entry->variable && entry->asid) {
             tlb_flush_page(CPU(xtensa_env_get_cpu(env)), entry->vaddr);
             entry->asid = 0;
+            xtensa_trace(env, XTENSA_TRACE_TLB_IDX, wi | (dtlb ? 0x80000000 : 0));
+            xtensa_trace(env, XTENSA_TRACE_TLB_INV_VPN, entry->vaddr);
         }
     }
 }
@@ -299,6 +302,9 @@ void xtensa_tlb_set_entry(CPUXtensaState *env, bool dtlb,
     CPUState *cs = CPU(cpu);
     xtensa_tlb_entry *entry = xtensa_tlb_get_entry(env, dtlb, wi, ei);
 
+    xtensa_trace(env, XTENSA_TRACE_TLB_IDX, wi | (ei << 12) | (dtlb ? 0x80000000 : 0));
+    xtensa_trace(env, XTENSA_TRACE_TLB_VPN, vpn);
+    xtensa_trace(env, XTENSA_TRACE_TLB_PTE, pte);
     if (xtensa_option_enabled(env->config, XTENSA_OPTION_MMU)) {
         if (entry->variable) {
             if (entry->asid) {
