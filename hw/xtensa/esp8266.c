@@ -579,7 +579,7 @@ static uint64_t esp8266_gpio_read(void *opaque, hwaddr addr,
         return user_entry;
 
     default:
-        fprintf(stderr, "%s, %x\n", __func__, (uint32_t)addr);
+        DEBUG_LOG("%s, +0x%x\n", __func__, (uint32_t)addr);
         break;
     }
     return 0;
@@ -645,7 +645,7 @@ static uint64_t esp8266_rtc_read(void *opaque, hwaddr addr,
         return 1;
 
     default:
-        fprintf(stderr, "%s, %x\n", __func__, (uint32_t)addr);
+        DEBUG_LOG("%s, +0x%x\n", __func__, (uint32_t)addr);
         break;
     }
     return 0;
@@ -956,12 +956,14 @@ static void esp8266_reset(void *opaque)
 static uint64_t esp8266_io_read(void *opaque, hwaddr addr,
                                 unsigned size)
 {
+    DEBUG_LOG("unassigned: read +0x%08x\n", (uint32_t)addr);
     return 0;
 }
 
 static void esp8266_io_write(void *opaque, hwaddr addr,
                              uint64_t val, unsigned size)
 {
+    DEBUG_LOG("unassigned: write +0x%08x = %08x\n", (uint32_t)addr, (uint32_t)val);
 }
 
 static const MemoryRegionOps esp8266_io_ops = {
