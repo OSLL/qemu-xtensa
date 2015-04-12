@@ -937,6 +937,164 @@ static Esp8266DportState *esp8266_dport_init(MemoryRegion *address_space,
     return s;
 }
 
+/* Internal I2C */
+
+typedef struct Esp8266I2CDevice Esp8266I2CDevice;
+struct Esp8266I2CDevice {
+    uint8_t (*read)(void *dev, uint8_t reg);
+    void (*write)(void *dev, uint8_t reg, uint8_t v);
+};
+
+
+enum {
+    ESP8266_I2C_PLL_MAX = 8,
+};
+
+typedef struct Esp8266I2CPllState {
+    Esp8266I2CDevice dev;
+
+    uint8_t reg[ESP8266_I2C_PLL_MAX];
+} Esp8266I2CPllState;
+
+static uint8_t esp8266_i2c_pll_read(void *dev, uint8_t reg)
+{
+    Esp8266I2CPllState *s = dev;
+
+    if (reg < ESP8266_I2C_PLL_MAX) {
+        return s->reg[reg];
+    } else {
+        return 0;
+    }
+}
+
+static void esp8266_i2c_pll_write(void *dev, uint8_t reg, uint8_t v)
+{
+    //Esp8266I2CPllState *s = dev;
+}
+
+static void esp8266_i2c_pll_reset(void *opaque)
+{
+    Esp8266I2CPllState *s = opaque;
+    memset(s->reg, 0, sizeof(s->reg));
+    s->reg[7] = 0xff;
+}
+
+static Esp8266I2CDevice *esp8266_i2c_pll_init(void)
+{
+    Esp8266I2CPllState *s = g_malloc(sizeof(Esp8266I2CPllState));
+
+    s->dev.read = esp8266_i2c_pll_read;
+    s->dev.write = esp8266_i2c_pll_write;
+    qemu_register_reset(esp8266_i2c_pll_reset, s);
+    return &s->dev;
+}
+
+
+enum {
+    ESP8266_I2C_CMD,
+
+    ESP8266_I2C_BUS_MAX = 2,
+    ESP8266_I2C_DEVICE_MAX = 128,
+};
+
+#define ESP8266_I2C_BITS(reg, field, shift, len) \
+    DEFINE_BITS(ESP8266_I2C, reg, field, shift, len)
+
+#define ESP8266_I2C_GET_VAL(v, _reg, _field) \
+    extract32(v, \
+              ESP8266_I2C_##_reg##_##_field##_SHIFT, \
+              ESP8266_I2C_##_reg##_##_field##_LEN)
+
+#define ESP8266_I2C_GET(s, _reg, _field) \
+    extract32(s->reg[ESP8266_I2C_##_reg], \
+              ESP8266_I2C_##_reg##_##_field##_SHIFT, \
+              ESP8266_I2C_##_reg##_##_field##_LEN)
+
+enum {
+    ESP8266_I2C_BITS(CMD, ADDR, 0, 7),
+    ESP8266_I2C_BITS(CMD, REG, 8, 8),
+    ESP8266_I2C_BITS(CMD, DATA, 16, 8),
+    ESP8266_I2C_BITS(CMD, WRITE, 24, 1),
+    ESP8266_I2C_BITS(CMD, BUSY, 25, 1),
+};
+
+typedef struct Esp8266I2CState {
+    MemoryRegion iomem;
+    Esp8266I2CDevice *device[ESP8266_I2C_BUS_MAX][ESP8266_I2C_DEVICE_MAX];
+    uint32_t reg[ESP8266_I2C_BUS_MAX];
+} Esp8266I2CState;
+
+static uint64_t esp8266_i2c_read(void *opaque, hwaddr addr,
+                                   unsigned size)
+{
+    Esp8266I2CState *s = opaque;
+
+    DEBUG_LOG("%s: +0x%02x: 0x%08x\n",
+              __func__, (uint32_t)addr % (ESP8266_I2C_BUS_MAX * 4),
+              s->reg[addr / 4]);
+
+    return s->reg[addr / 4];
+}
+
+static void esp8266_i2c_write(void *opaque, hwaddr addr,
+                                uint64_t val, unsigned size)
+{
+    Esp8266I2CState *s = opaque;
+    Esp8266I2CDevice *dev = s->device[addr / 4][ESP8266_I2C_GET_VAL(val, CMD, ADDR)];
+
+    DEBUG_LOG("%s: +0x%02x = 0x%08x\n",
+              __func__, (uint32_t)addr % (ESP8266_I2C_BUS_MAX * 4),
+              (uint32_t)val);
+
+    if (addr % 4 || size != 4) {
+        return;
+    }
+
+    if (ESP8266_I2C_GET_VAL(val, CMD, WRITE)) {
+        if (dev) {
+            dev->write(dev, ESP8266_I2C_GET_VAL(val, CMD, REG),
+                       ESP8266_I2C_GET_VAL(val, CMD, DATA));
+        }
+    } else {
+        s->reg[addr / 4] = (val & (ESP8266_I2C_CMD_ADDR | ESP8266_I2C_CMD_REG));
+        if (dev) {
+            s->reg[addr / 4] |=
+                dev->read(dev, ESP8266_I2C_GET_VAL(val, CMD, REG)) <<
+                ESP8266_I2C_CMD_DATA_SHIFT;
+        } else {
+            s->reg[addr / 4] |= ESP8266_I2C_CMD_DATA;
+        }
+    }
+}
+
+static const MemoryRegionOps esp8266_i2c_ops = {
+    .read = esp8266_i2c_read,
+    .write = esp8266_i2c_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+static void esp8266_i2c_reset(void *opaque)
+{
+    Esp8266I2CState *s = opaque;
+    memset(s->reg, 0, sizeof(s->reg));
+}
+
+static Esp8266I2CState *esp8266_i2c_init(MemoryRegion *address_space,
+                                         hwaddr base)
+{
+    Esp8266I2CState *s = g_malloc(sizeof(Esp8266I2CState));
+
+    memory_region_init_io(&s->iomem, NULL, &esp8266_i2c_ops, s,
+                          "esp8266.i2c", ESP8266_I2C_BUS_MAX * 4);
+    memory_region_add_subregion(address_space, base, &s->iomem);
+    qemu_register_reset(esp8266_i2c_reset, s);
+
+    memset(s->device, 0, sizeof(s->device));
+    s->device[1][0x62] = esp8266_i2c_pll_init();
+    return s;
+}
+
+/* Other helpers */
 
 static uint64_t translate_phys_addr(void *opaque, uint64_t addr)
 {
@@ -1036,6 +1194,7 @@ static void xtensa_esp8266_init(MachineState *machine)
     esp8266_gpio_init(system_io, 0x00000300);
     esp8266_rtc_init(system_io, 0x00000700);
     esp8266_pinmux_init(system_io, 0x00000800);
+    esp8266_i2c_init(system_io, 0x00000d00);
 
     esp8266_dport_init(system_memory, 0x3ff00000, spi);
 
