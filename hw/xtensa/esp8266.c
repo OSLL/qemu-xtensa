@@ -1115,6 +1115,12 @@ static uint64_t esp8266_io_read(void *opaque, hwaddr addr,
                                 unsigned size)
 {
     DEBUG_LOG("unassigned: read +0x%08x\n", (uint32_t)addr);
+    switch (addr) {
+    case 0x057c:
+        return 0x80000000;
+    case 0x0d4c:
+        return 0x01000000;
+    }
     return 0;
 }
 
