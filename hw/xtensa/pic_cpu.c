@@ -73,7 +73,8 @@ static void xtensa_set_irq(void *opaque, int irq, int active)
 
         if (active) {
             atomic_or(&env->sregs[INTSET], irq_bit);
-        } else if (env->config->interrupt[irq].inttype == INTTYPE_LEVEL) {
+        } else if (env->config->interrupt[irq].inttype == INTTYPE_LEVEL ||
+                   env->config->interrupt[irq].inttype == INTTYPE_PROFILING) {
             atomic_and(&env->sregs[INTSET], ~irq_bit);
         }
 
