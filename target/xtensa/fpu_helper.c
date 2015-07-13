@@ -33,7 +33,7 @@
 #include "exec/exec-all.h"
 #include "fpu/softfloat.h"
 
-void HELPER(wur_fcr)(CPUXtensaState *env, uint32_t v)
+void HELPER(wur_fpu2k_fcr)(CPUXtensaState *env, uint32_t v)
 {
     static const int rounding_mode[] = {
         float_round_nearest_even,
@@ -82,7 +82,7 @@ float32 HELPER(msub_s)(CPUXtensaState *env, float32 a, float32 b, float32 c)
                           &env->fp_status);
 }
 
-uint32_t HELPER(ftoi)(float32 v, uint32_t rounding_mode, uint32_t scale)
+uint32_t HELPER(ftoi_s)(float32 v, uint32_t rounding_mode, uint32_t scale)
 {
     float_status fp_status = {0};
 
@@ -90,7 +90,7 @@ uint32_t HELPER(ftoi)(float32 v, uint32_t rounding_mode, uint32_t scale)
     return float32_to_int32(float32_scalbn(v, scale, &fp_status), &fp_status);
 }
 
-uint32_t HELPER(ftoui)(float32 v, uint32_t rounding_mode, uint32_t scale)
+uint32_t HELPER(ftoui_s)(float32 v, uint32_t rounding_mode, uint32_t scale)
 {
     float_status fp_status = {0};
     float32 res;
@@ -106,13 +106,13 @@ uint32_t HELPER(ftoui)(float32 v, uint32_t rounding_mode, uint32_t scale)
     }
 }
 
-float32 HELPER(itof)(CPUXtensaState *env, uint32_t v, uint32_t scale)
+float32 HELPER(itof_s)(CPUXtensaState *env, uint32_t v, uint32_t scale)
 {
     return float32_scalbn(int32_to_float32(v, &env->fp_status),
                           (int32_t)scale, &env->fp_status);
 }
 
-float32 HELPER(uitof)(CPUXtensaState *env, uint32_t v, uint32_t scale)
+float32 HELPER(uitof_s)(CPUXtensaState *env, uint32_t v, uint32_t scale)
 {
     return float32_scalbn(uint32_to_float32(v, &env->fp_status),
                           (int32_t)scale, &env->fp_status);

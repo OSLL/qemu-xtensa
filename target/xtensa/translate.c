@@ -2813,10 +2813,10 @@ static void translate_wur(DisasContext *dc, const OpcodeArg arg[],
     tcg_gen_mov_i32(cpu_UR[par[0]], arg[0].in);
 }
 
-static void translate_wur_fcr(DisasContext *dc, const OpcodeArg arg[],
-                              const uint32_t par[])
+static void translate_wur_fpu2k_fcr(DisasContext *dc, const OpcodeArg arg[],
+                                    const uint32_t par[])
 {
-    gen_helper_wur_fcr(cpu_env, arg[0].in);
+    gen_helper_wur_fpu2k_fcr(cpu_env, arg[0].in);
 }
 
 static void translate_wur_fsr(DisasContext *dc, const OpcodeArg arg[],
@@ -5583,7 +5583,7 @@ static const XtensaOpcodeOps core_ops[] = {
         .par = (const uint32_t[]){EXPSTATE},
     }, {
         .name = "wur.fcr",
-        .translate = translate_wur_fcr,
+        .translate = translate_wur_fpu2k_fcr,
         .par = (const uint32_t[]){FCR},
         .coprocessor = 0x1,
     }, {
@@ -6373,9 +6373,9 @@ static void translate_float_s(DisasContext *dc, const OpcodeArg arg[],
     TCGv_i32 scale = tcg_const_i32(-arg[2].imm);
 
     if (par[0]) {
-        gen_helper_uitof(arg[0].out, cpu_env, arg[1].in, scale);
+        gen_helper_uitof_s(arg[0].out, cpu_env, arg[1].in, scale);
     } else {
-        gen_helper_itof(arg[0].out, cpu_env, arg[1].in, scale);
+        gen_helper_itof_s(arg[0].out, cpu_env, arg[1].in, scale);
     }
     tcg_temp_free(scale);
 }
@@ -6387,11 +6387,11 @@ static void translate_ftoi_s(DisasContext *dc, const OpcodeArg arg[],
     TCGv_i32 scale = tcg_const_i32(arg[2].imm);
 
     if (par[1]) {
-        gen_helper_ftoui(arg[0].out, arg[1].in,
-                         rounding_mode, scale);
+        gen_helper_ftoui_s(arg[0].out, arg[1].in,
+                           rounding_mode, scale);
     } else {
-        gen_helper_ftoi(arg[0].out, arg[1].in,
-                        rounding_mode, scale);
+        gen_helper_ftoi_s(arg[0].out, arg[1].in,
+                          rounding_mode, scale);
     }
     tcg_temp_free(rounding_mode);
     tcg_temp_free(scale);
