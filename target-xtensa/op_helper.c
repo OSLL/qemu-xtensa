@@ -489,6 +489,14 @@ void HELPER(check_atomctl)(CPUXtensaState *env, uint32_t pc, uint32_t vaddr)
     }
 }
 
+void HELPER(check_iram)(CPUXtensaState *env, uint32_t pc, uint32_t vaddr)
+{
+    if (vaddr >= 0x40000000 && vaddr < 0x40300000) {
+        HELPER(exception_cause_vaddr)(env, pc,
+                LOAD_STORE_ERROR_CAUSE, vaddr);
+    }
+}
+
 void HELPER(wsr_rasid)(CPUXtensaState *env, uint32_t v)
 {
     XtensaCPU *cpu = xtensa_env_get_cpu(env);

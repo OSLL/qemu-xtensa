@@ -2218,6 +2218,11 @@ static void disas_xtensa_insn(CPUXtensaState *env, DisasContext *dc)
             if (shift) { \
                 gen_load_store_alignment(dc, shift, addr, false); \
             } \
+            if (shift < 2) { \
+                TCGv_i32 tpc = tcg_const_i32(dc->pc); \
+                gen_helper_check_iram(cpu_env, tpc, addr); \
+                tcg_temp_free(tpc); \
+            } \
             tcg_gen_qemu_##type(cpu_R[RRI8_T], addr, dc->cring); \
             tcg_temp_free(addr); \
         } while (0)
