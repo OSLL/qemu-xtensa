@@ -670,6 +670,22 @@ int cpu_signal_handler(int host_signum, void *pinfo,
                              is_write, &uc->uc_sigmask, puc);
 }
 
+#elif defined(__XTENSA__)
+
+int cpu_signal_handler(int host_signum, void *pinfo,
+                       void *puc)
+{
+    siginfo_t *info = pinfo;
+    struct ucontext *uc = puc;
+    unsigned long pc = uc->uc_mcontext.sc_pc;
+    int is_write;
+
+    /* XXX: compute is_write */
+    is_write = 0;
+    return handle_cpu_signal(pc, (unsigned long)info->si_addr,
+                             is_write, &uc->uc_sigmask, puc);
+}
+
 #else
 
 #error host CPU specific signal handler needed

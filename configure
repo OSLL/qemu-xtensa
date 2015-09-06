@@ -506,6 +506,8 @@ elif check_define __aarch64__ ; then
   cpu="aarch64"
 elif check_define __hppa__ ; then
   cpu="hppa"
+elif check_define __xtensa__ ; then
+  cpu="xtensa"
 else
   cpu=`uname -m`
 fi
@@ -514,7 +516,7 @@ ARCH=
 # Normalise host CPU name and set ARCH.
 # Note that this case should only have supported host CPUs, not guests.
 case "$cpu" in
-  ia64|ppc|ppc64|s390|s390x|sparc64|x32)
+  ia64|ppc|ppc64|s390|s390x|sparc64|x32|xtensa)
     cpu="$cpu"
   ;;
   i386|i486|i586|i686|i86pc|BePC)

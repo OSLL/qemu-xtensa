@@ -229,6 +229,7 @@ static inline void tlb_flush_by_mmuidx(CPUState *cpu, ...)
     || defined(__sparc__) || defined(__aarch64__) \
     || defined(__s390x__) || defined(__mips__) \
     || defined(CONFIG_TCG_INTERPRETER)
+//    || defined(__xtensa__)
 #define USE_DIRECT_JUMP
 #endif
 
@@ -350,7 +351,7 @@ static inline void tb_set_jmp_target1(uintptr_t jmp_addr, uintptr_t addr)
     __asm __volatile__ ("swi 0x9f0002" : : "r" (_beg), "r" (_end), "r" (_flg));
 #endif
 }
-#elif defined(__sparc__) || defined(__mips__)
+#elif defined(__sparc__) || defined(__mips__) || defined(__xtensa__)
 void tb_set_jmp_target1(uintptr_t jmp_addr, uintptr_t addr);
 #else
 #error tb_set_jmp_target1 is missing
