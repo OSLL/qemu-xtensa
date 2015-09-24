@@ -12,3 +12,4 @@ obj-y += core-test_kc705_be.o
 obj-y += core-dc233_xea3.o
 obj-y += core-lx106.o
 obj-y += core-test_kc705_perf.o
+obj-y += core-de108.o
