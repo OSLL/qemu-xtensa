@@ -100,6 +100,8 @@ static const int tcg_target_call_oarg_regs[] = {
 enum {
     R_XTENSA_PCREL8,
     R_XTENSA_PCREL8_18,
+    R_XTENSA_PCRELI8_18,
+    R_XTENSA_PCREL12_18,
     R_XTENSA_PCREL18,
 };
 
@@ -120,12 +122,40 @@ enum {
 
     BANY_OP0 = 0x7,
     BANY_R = 0x8,
+
     BEQ_R = 0x1,
+    BEQI_M = 0x0,
+    BEQI_N = 0x2,
+    BEQZ_M = 0x0,
+    BEQZ_N = 0x1,
+
     BGE_R = 0xa,
+    BGEI_M = 0x3,
+    BGEI_N = 0x2,
+    BGEZ_M = 0x3,
+    BGEZ_N = 0x1,
+
     BGEU_R = 0xb,
+    BGEUI_M = 0x3,
+    BGEUI_N = 0x3,
+
     BLT_R = 0x2,
+    BLTI_M = 0x2,
+    BLTI_N = 0x2,
+    BLTZ_M = 0x2,
+    BLTZ_N = 0x1,
+
     BLTU_R = 0x3,
+    BLTUI_M = 0x2,
+    BLTUI_N = 0x3,
+
     BNE_R = 0x9,
+    BNEI_M = 0x1,
+    BNEI_N = 0x2,
+    BNEZ_M = 0x1,
+    BNEZ_N = 0x1,
+
+    BRI_OP0 = 0x6,
 
     CALL8_OP0 = 0x5,
     CALL8_N = 0x2,
@@ -331,6 +361,14 @@ static void tcg_out_bri12(TCGContext *c, uint8_t op0, uint8_t n, uint8_t m,
     tcg_out8(c, XTENSA_TCG_BITS(imm12, 12, 4, 8));
 }
 
+static void tcg_out_bri8(TCGContext *c, uint8_t op0, uint8_t n, uint8_t m,
+                         uint8_t r, uint8_t s, uint8_t imm8)
+{
+    tcg_out8(c, XTENSA_TCG_BYTE(op0, XTENSA_TCG_NIBBLE(n, m)));
+    tcg_out8(c, XTENSA_TCG_BYTE(s, r));
+    tcg_out8(c, imm8);
+}
+
 static void tcg_out_call_fmt(TCGContext *c, uint8_t op0, uint8_t n,
                              uint32_t offset)
 {
@@ -524,6 +562,32 @@ static void tcg_out_not(TCGContext *s, TCGReg ret, TCGReg arg)
     tcg_out_xor(s, ret, arg, TCG_REG_TMP);
 }
 
+static int xtensa_b4(tcg_target_long val)
+{
+    static const tcg_target_long b4const[] = {
+        -1, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 32, 64, 128, 256,
+    };
+    unsigned i;
+
+    for (i = 0; i < ARRAY_SIZE(b4const); ++i)
+        if (val == b4const[i])
+            return i;
+    return -1;
+}
+
+static int xtensa_b4u(tcg_target_long val)
+{
+    static const tcg_target_long b4constu[] = {
+        32768, 65536, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 32, 64, 128, 256,
+    };
+    unsigned i;
+
+    for (i = 0; i < ARRAY_SIZE(b4constu); ++i)
+        if (val == b4constu[i])
+            return i;
+    return -1;
+}
+
 static void reloc_pcrel18(tcg_insn_unit *code_ptr, tcg_insn_unit *value)
 {
     intptr_t diff = value - code_ptr - 4;
@@ -536,6 +600,25 @@ static void reloc_pcrel18(tcg_insn_unit *code_ptr, tcg_insn_unit *value)
         code_ptr[2] = XTENSA_TCG_BITS(diff, 18, 10, 8);
     } else {
         tcg_abort();
+    }
+}
+
+static void reloc_pcrel12_18(tcg_insn_unit *code_ptr, tcg_insn_unit *value)
+{
+    intptr_t diff = value - code_ptr - 4;
+
+    if (diff == ((diff & 0xfff) ^ 0x800) - 0x800) {
+        code_ptr[1] = (code_ptr[1] & XTENSA_TCG_BYTE(0xf, 0)) |
+            XTENSA_TCG_BYTE(0, XTENSA_TCG_BITS(diff, 12, 0, 4));
+        code_ptr[2] = XTENSA_TCG_BITS(diff, 12, 4, 8);
+    } else {
+        code_ptr[0] ^= XTENSA_TCG_BYTE(0, XTENSA_TCG_NIBBLE(0, 0x1));
+        code_ptr[1] = (code_ptr[1] & XTENSA_TCG_BYTE(0xf, 0)) |
+            XTENSA_TCG_BYTE(0, XTENSA_TCG_BITS(2, 12, 0, 4));
+        code_ptr[2] = XTENSA_TCG_BITS(0, 12, 4, 8);
+
+        code_ptr[3] = XTENSA_TCG_BYTE(J_OP0, XTENSA_TCG_NIBBLE(J_N, 0));
+        reloc_pcrel18(code_ptr + 3, value);
     }
 }
 
@@ -565,10 +648,28 @@ static void reloc_pcrel8_18(tcg_insn_unit *code_ptr, tcg_insn_unit *value)
     }
 }
 
+static void reloc_pcreli8_18(tcg_insn_unit *code_ptr, tcg_insn_unit *value)
+{
+    intptr_t diff = value - code_ptr - 4;
+
+    if (diff == (int8_t)diff) {
+        code_ptr[2] = diff;
+    } else {
+        code_ptr[1] ^= XTENSA_TCG_BYTE(0, XTENSA_TCG_NIBBLE(0, 0x1));
+        code_ptr[2] = 2;
+
+        code_ptr[3] = XTENSA_TCG_BYTE(J_OP0, XTENSA_TCG_NIBBLE(J_N, 0));
+        reloc_pcrel18(code_ptr + 3, value);
+    }
+}
+
 static void patch_reloc(tcg_insn_unit *code_ptr, int type,
                         intptr_t value, intptr_t addend)
 {
     switch (type) {
+    case R_XTENSA_PCREL12_18:
+        reloc_pcrel12_18(code_ptr, (tcg_insn_unit *)value);
+        break;
     case R_XTENSA_PCREL18:
         reloc_pcrel18(code_ptr, (tcg_insn_unit *)value);
         break;
@@ -577,6 +678,9 @@ static void patch_reloc(tcg_insn_unit *code_ptr, int type,
         break;
     case R_XTENSA_PCREL8_18:
         reloc_pcrel8_18(code_ptr, (tcg_insn_unit *)value);
+        break;
+    case R_XTENSA_PCRELI8_18:
+        reloc_pcreli8_18(code_ptr, (tcg_insn_unit *)value);
         break;
     default:
         tcg_abort();
@@ -818,11 +922,83 @@ static void tcg_out_brcond(TCGContext *s, TCGCond cond, TCGReg arg1,
     }
 }
 
+static void tcg_out_brcondz_code(TCGContext *s, TCGCond cond, TCGReg arg1)
+{
+    static const uint8_t tcg_cond_to_xtensa_bz_nm[][2] = {
+        [TCG_COND_EQ] = { BEQZ_N, BEQZ_M },
+        [TCG_COND_NE] = { BNEZ_N, BNEZ_M },
+        [TCG_COND_LT] = { BLTZ_N, BLTZ_M },
+        [TCG_COND_GE] = { BGEZ_N, BGEZ_M },
+    };
+
+    /* All BRI12 branch instructions share the same OP0 code. */
+    tcg_out_bri12(s, BRI_OP0,
+                  tcg_cond_to_xtensa_bz_nm[cond][0],
+                  tcg_cond_to_xtensa_bz_nm[cond][1], arg1, 0);
+}
+
+static void tcg_out_brcondi_code(TCGContext *s, TCGCond cond,
+                                 TCGReg arg1, uint8_t arg2)
+{
+    static const uint8_t tcg_cond_to_xtensa_bi_nm[][2] = {
+        [TCG_COND_EQ] = { BEQI_N, BEQI_M },
+        [TCG_COND_NE] = { BNEI_N, BNEI_M },
+        [TCG_COND_LT] = { BLTI_N, BLTI_M },
+        [TCG_COND_GE] = { BGEI_N, BGEI_M },
+        [TCG_COND_LTU] = { BLTUI_N, BLTUI_M },
+        [TCG_COND_GEU] = { BGEUI_N, BGEUI_M },
+    };
+
+    /* All BRI8 branch instructions share the same OP0 code. */
+    tcg_out_bri8(s, BRI_OP0,
+                 tcg_cond_to_xtensa_bi_nm[cond][0],
+                 tcg_cond_to_xtensa_bi_nm[cond][1], arg2, arg1, 0);
+}
+
 static void tcg_out_brcondi(TCGContext *s, TCGCond cond, TCGReg arg1,
                             intptr_t arg2, TCGLabel *l)
 {
-    tcg_out_movi32(s, TCG_REG_TMP, arg2);
-    tcg_out_brcond(s, cond, arg1, TCG_REG_TMP, l);
+    int i = -1;
+
+    switch (cond) {
+    case TCG_COND_EQ:
+    case TCG_COND_NE:
+    case TCG_COND_LT:
+    case TCG_COND_GE:
+        if (arg2 == 0) {
+            tcg_out_brcondz_code(s, cond, arg1);
+            tcg_out_nop(s);
+            if (l->has_value) {
+                reloc_pcrel12_18(s->code_ptr - 6, l->u.value_ptr);
+            } else {
+                tcg_out_reloc(s, s->code_ptr - 6, R_XTENSA_PCREL12_18, l, 0);
+            }
+            break;
+        }
+        /* fallthrough */
+    case TCG_COND_LTU:
+    case TCG_COND_GEU:
+        if (is_unsigned_cond(cond)) {
+            i = xtensa_b4u(arg2);
+        } else if (!is_unsigned_cond(cond)) {
+            i = xtensa_b4(arg2);
+        }
+        if (i >= 0) {
+            tcg_out_brcondi_code(s, cond, arg1, i);
+            tcg_out_nop(s);
+            if (l->has_value) {
+                reloc_pcreli8_18(s->code_ptr - 6, l->u.value_ptr);
+            } else {
+                tcg_out_reloc(s, s->code_ptr - 6, R_XTENSA_PCRELI8_18, l, 0);
+            }
+            break;
+        }
+        /* fallthrough */
+    default:
+        tcg_out_movi32(s, TCG_REG_TMP, arg2);
+        tcg_out_brcond(s, cond, arg1, TCG_REG_TMP, l);
+        break;
+    }
 }
 
 static void tcg_out_setcond(TCGContext *s, TCGCond cond, TCGReg ret,
@@ -1223,8 +1399,6 @@ static void tcg_out_qemu_st(TCGContext *s, const TCGArg *args, bool is_64)
 }
 
 #define TCG_CT_CONST_S8   0x100
-#define TCG_CT_CONST_B4   0x200
-#define TCG_CT_CONST_B4U  0x400
 
 /* parse target specific constraints */
 static int target_parse_constraint(TCGArgConstraint *ct, const char **pct_str)
@@ -1263,12 +1437,6 @@ static int target_parse_constraint(TCGArgConstraint *ct, const char **pct_str)
     case 'J':
         ct->ct |= TCG_CT_CONST_S8;
         break;
-    case 'K':
-        ct->ct |= TCG_CT_CONST_B4;
-        break;
-    case 'L':
-        ct->ct |= TCG_CT_CONST_B4U;
-        break;
     default:
         return -1;
     }
@@ -1283,32 +1451,6 @@ static int xtensa_simm8(tcg_target_long val)
     return val == (int8_t)val;
 }
 
-static int xtensa_b4(tcg_target_long val)
-{
-    static const tcg_target_long b4const[] = {
-        -1, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 32, 64, 128, 256,
-    };
-    unsigned i;
-
-    for (i = 0; i < ARRAY_SIZE(b4const); ++i)
-        if (val == b4const[i])
-            return 1;
-    return 0;
-}
-
-static int xtensa_b4u(tcg_target_long val)
-{
-    static const tcg_target_long b4constu[] = {
-        32768, 65536, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 32, 64, 128, 256,
-    };
-    unsigned i;
-
-    for (i = 0; i < ARRAY_SIZE(b4constu); ++i)
-        if (val == b4constu[i])
-            return 1;
-    return 0;
-}
-
 /* test if a constant matches the constraint */
 static inline int tcg_target_const_match(tcg_target_long val, TCGType type,
                                          const TCGArgConstraint *arg_ct)
@@ -1318,10 +1460,6 @@ static inline int tcg_target_const_match(tcg_target_long val, TCGType type,
     if (ct & TCG_CT_CONST) {
         return 1;
     } else if ((ct & TCG_CT_CONST_S8) && xtensa_simm8(val)) {
-        return 1;
-    } else if ((ct & TCG_CT_CONST_B4) && (val == 0 || xtensa_b4(val))) {
-        return 1;
-    } else if ((ct & TCG_CT_CONST_B4U) && xtensa_b4u(val)) {
         return 1;
     } else {
         return 0;
@@ -1600,7 +1738,7 @@ static const TCGTargetOpDef xtensa_op_defs[] = {
     { INDEX_op_rotl_i32, { "r", "r", "rJ" } },
     { INDEX_op_rotr_i32, { "r", "r", "rJ" } },
 
-    { INDEX_op_brcond_i32, { "r", "r" } }, //"rKL"
+    { INDEX_op_brcond_i32, { "r", "ri" } },
     { INDEX_op_setcond_i32, { "r", "r", "r" } },
 
 #if TARGET_LONG_BITS == 32
