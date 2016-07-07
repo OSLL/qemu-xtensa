@@ -308,6 +308,9 @@ static pflash_t *xtfpga_flash_init(MemoryRegion *address_space,
     qdev_prop_set_uint64(dev, "sector-length", board->flash_sector_size);
     qdev_prop_set_uint8(dev, "width", 2);
     qdev_prop_set_bit(dev, "big-endian", be);
+    qdev_prop_set_uint16(dev, "id1", 0x89);
+    qdev_prop_set_uint16(dev, "id2", 0x89);
+    qdev_prop_set_uint16(dev, "id3", 0x66);
     qdev_prop_set_string(dev, "name", "lx60.io.flash");
     qdev_init_nofail(dev);
     s = SYS_BUS_DEVICE(dev);
