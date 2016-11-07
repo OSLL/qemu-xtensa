@@ -406,11 +406,6 @@ void HELPER(waiti)(CPUXtensaState *env, uint32_t pc, uint32_t intlevel)
     HELPER(exception)(env, EXCP_HLT);
 }
 
-void HELPER(timer_irq)(CPUXtensaState *env, uint32_t id, uint32_t active)
-{
-    xtensa_timer_irq(env, id, active);
-}
-
 void HELPER(advance_ccount)(CPUXtensaState *env, uint32_t d)
 {
     xtensa_advance_ccount(env, d);
