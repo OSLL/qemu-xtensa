@@ -51,6 +51,10 @@
 #define XCHAL_HW_MIN_VERSION 0
 #endif
 
+#ifndef XCHAL_LOOP_BUFFER_SIZE
+#define XCHAL_LOOP_BUFFER_SIZE 0
+#endif
+
 #define XCHAL_OPTION(xchal, qemu) ((xchal) ? XTENSA_OPTION_BIT(qemu) : 0)
 
 #define XTENSA_OPTIONS ( \
@@ -334,6 +338,16 @@
     .nibreak = XCHAL_NUM_IBREAK, \
     .ndbreak = XCHAL_NUM_DBREAK
 
+#define CACHE_SECTION \
+    .icache_ways = XCHAL_ICACHE_WAYS, \
+    .dcache_ways = XCHAL_DCACHE_WAYS, \
+    .memctl_mask = \
+        (XCHAL_ICACHE_SIZE ? MEMCTL_IUSEWAYS_MASK : 0) | \
+        (XCHAL_DCACHE_SIZE ? \
+         MEMCTL_DALLOCWAYS_MASK | MEMCTL_DUSEWAYS_MASK : 0) | \
+        MEMCTL_ISNP | MEMCTL_DSNP | \
+        (XCHAL_HAVE_LOOPS && XCHAL_LOOP_BUFFER_SIZE ? MEMCTL_IL0EN : 0)
+
 #define CONFIG_SECTION \
     .configid = { \
         XCHAL_HW_CONFIGID0, \
@@ -348,6 +362,7 @@
     INTERRUPTS_SECTION, \
     TLB_SECTION, \
     DEBUG_SECTION, \
+    CACHE_SECTION, \
     CONFIG_SECTION
 
 
