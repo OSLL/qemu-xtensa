@@ -424,7 +424,8 @@ multiboot.bin linuxboot.bin linuxboot_dma.bin kvmvapic.bin \
 s390-ccw.img \
 spapr-rtas.bin slof.bin \
 palcode-clipper \
-u-boot.e500
+u-boot.e500 \
+esp32-3ff90000.rom esp32-40000000.rom
 else
 BLOBS=
 endif
