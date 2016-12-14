@@ -385,6 +385,7 @@ typedef struct CPUXtensaState {
     xtensa_tlb_entry dtlb[10][MAX_TLB_WAY_SIZE];
     unsigned autorefill_idx;
 
+    bool runstall;
     int pending_irq_level; /* level of last raised IRQ */
     void **irq_inputs;
     QEMUTimer *ccompare_timer;
@@ -479,7 +480,7 @@ int xtensa_get_physical_addr(CPUXtensaState *env, bool update_tlb,
 void reset_mmu(CPUXtensaState *env);
 void dump_mmu(FILE *f, fprintf_function cpu_fprintf, CPUXtensaState *env);
 void debug_exception_env(CPUXtensaState *new_env, uint32_t cause);
-
+void xtensa_runstall(CPUXtensaState *env, bool runstall);
 
 #define XTENSA_OPTION_BIT(opt) (((uint64_t)1) << (opt))
 #define XTENSA_OPTION_ALL (~(uint64_t)0)
