@@ -204,6 +204,7 @@ static const XtensaReg sregnames[256] = {
 };
 
 static const XtensaReg uregnames[256] = {
+    [EXPSTATE] = XTENSA_REG_BITS("EXPSTATE", XTENSA_OPTION_ALL),
     [THREADPTR] = XTENSA_REG("THREADPTR", XTENSA_OPTION_THREAD_POINTER),
     [FCR] = XTENSA_REG("FCR", XTENSA_OPTION_FP_COPROCESSOR),
     [FSR] = XTENSA_REG("FSR", XTENSA_OPTION_FP_COPROCESSOR),
@@ -1518,6 +1519,13 @@ static void translate_clamps(DisasContext *dc, const uint32_t arg[],
     }
 }
 
+static void translate_clrb_expstate(DisasContext *dc, const uint32_t arg[],
+                                    const uint32_t par[])
+{
+    /* TODO: GPIO32 may be a part of coprocessor */
+    tcg_gen_andi_i32(cpu_UR[EXPSTATE], cpu_UR[EXPSTATE], ~(1u << arg[0]));
+}
+
 /* par[0]: privileged, par[1]: check memory access */
 static void translate_dcache(DisasContext *dc, const uint32_t arg[],
                              const uint32_t par[])
@@ -2013,6 +2021,15 @@ static void translate_quou(DisasContext *dc, const uint32_t arg[],
     }
 }
 
+static void translate_read_impwire(DisasContext *dc, const uint32_t arg[],
+                                   const uint32_t par[])
+{
+    if (gen_window_check1(dc, arg[0])) {
+        /* TODO: GPIO32 may be a part of coprocessor */
+        tcg_gen_movi_i32(cpu_R[arg[0]], 0);
+    }
+}
+
 static void translate_rer(DisasContext *dc, const uint32_t arg[],
                           const uint32_t par[])
 {
@@ -2155,6 +2172,13 @@ static void translate_rur(DisasContext *dc, const uint32_t arg[],
             qemu_log_mask(LOG_UNIMP, "RUR %d not implemented, ", par[0]);
         }
     }
+}
+
+static void translate_setb_expstate(DisasContext *dc, const uint32_t arg[],
+                                    const uint32_t par[])
+{
+    /* TODO: GPIO32 may be a part of coprocessor */
+    tcg_gen_ori_i32(cpu_UR[EXPSTATE], cpu_UR[EXPSTATE], 1u << arg[0]);
 }
 
 static void translate_s32c1i(DisasContext *dc, const uint32_t arg[],
@@ -2445,6 +2469,15 @@ static void translate_wer(DisasContext *dc, const uint32_t arg[],
     }
 }
 
+static void translate_wrmsk_expstate(DisasContext *dc, const uint32_t arg[],
+                                     const uint32_t par[])
+{
+    if (gen_window_check2(dc, arg[0], arg[1])) {
+        /* TODO: GPIO32 may be a part of coprocessor */
+        tcg_gen_and_i32(cpu_UR[EXPSTATE], cpu_R[arg[0]], cpu_R[arg[1]]);
+    }
+}
+
 static void translate_wsr(DisasContext *dc, const uint32_t arg[],
                           const uint32_t par[])
 {
@@ -2705,6 +2738,9 @@ static const XtensaOpcodeOps core_ops[] = {
     }, {
         .name = "clamps",
         .translate = translate_clamps,
+    }, {
+        .name = "clrb_expstate",
+        .translate = translate_clrb_expstate,
     }, {
         .name = "depbits",
         .translate = translate_depbits,
@@ -3268,6 +3304,9 @@ static const XtensaOpcodeOps core_ops[] = {
         .translate = translate_rtlb,
         .par = (const uint32_t[]){true, 1},
     }, {
+        .name = "read_impwire",
+        .translate = translate_read_impwire,
+    }, {
         .name = "rems",
         .translate = translate_quos,
         .par = (const uint32_t[]){false},
@@ -3635,6 +3674,10 @@ static const XtensaOpcodeOps core_ops[] = {
         .name = "rsync",
         .translate = translate_nop,
     }, {
+        .name = "rur.expstate",
+        .translate = translate_rur,
+        .par = (const uint32_t[]){EXPSTATE},
+    }, {
         .name = "rur.fcr",
         .translate = translate_rur,
         .par = (const uint32_t[]){FCR},
@@ -3684,6 +3727,9 @@ static const XtensaOpcodeOps core_ops[] = {
         .name = "saltu",
         .translate = translate_salt,
         .par = (const uint32_t[]){TCG_COND_LTU},
+    }, {
+        .name = "setb_expstate",
+        .translate = translate_setb_expstate,
     }, {
         .name = "sext",
         .translate = translate_sext,
@@ -3774,6 +3820,9 @@ static const XtensaOpcodeOps core_ops[] = {
         .name = "witlb",
         .translate = translate_wtlb,
         .par = (const uint32_t[]){false},
+    }, {
+        .name = "wrmsk_expstate",
+        .translate = translate_wrmsk_expstate,
     }, {
         .name = "wsr.176",
         .translate = translate_wsr,
@@ -4082,6 +4131,10 @@ static const XtensaOpcodeOps core_ops[] = {
         .name = "wsr.windowstart",
         .translate = translate_wsr,
         .par = (const uint32_t[]){WINDOW_START},
+    }, {
+        .name = "wur.expstate",
+        .translate = translate_wur,
+        .par = (const uint32_t[]){EXPSTATE},
     }, {
         .name = "wur.fcr",
         .translate = translate_wur,
