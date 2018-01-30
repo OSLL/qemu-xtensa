@@ -53,13 +53,15 @@
 
 #if HOST_LONG_BITS <= TARGET_VIRT_ADDR_SPACE_BITS
 #define h2g_valid(x) 1
+#define guest_valid(x) 1
 #else
-#define h2g_valid(x) ({ \
-    unsigned long __guest = (unsigned long)(x) - guest_base; \
-    (__guest < (1ul << TARGET_VIRT_ADDR_SPACE_BITS)) && \
-    (!reserved_va || (__guest < reserved_va)); \
-})
+#define h2g_valid(x) guest_valid((unsigned long)(x) - guest_base)
+#define guest_valid(x) ((x) <= GUEST_ADDR_MAX)
 #endif
+
+#define guest_range_valid(start, len) \
+    ({unsigned long l = (len); \
+     guest_valid(l) && (start) <= GUEST_ADDR_MAX - l; })
 
 #define h2g_nocheck(x) ({ \
     unsigned long __ret = (unsigned long)(x) - guest_base; \

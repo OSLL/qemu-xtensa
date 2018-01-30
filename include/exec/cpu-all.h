@@ -160,7 +160,7 @@ extern int have_guest_base;
 extern unsigned long reserved_va;
 
 #define GUEST_ADDR_MAX (reserved_va ? reserved_va : \
-                                    (1ul << TARGET_VIRT_ADDR_SPACE_BITS) - 1)
+                        (2ul << (TARGET_VIRT_ADDR_SPACE_BITS - 1)) - 1)
 #else
 
 #include "exec/hwaddr.h"
