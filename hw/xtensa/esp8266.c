@@ -41,7 +41,7 @@
 #include "qemu/error-report.h"
 #include "bootparam.h"
 
-#define DEBUG_LOG(...) // fprintf(stderr, __VA_ARGS__)
+#define DEBUG_LOG(...) fprintf(stderr, __VA_ARGS__)
 
 #define DEFINE_BITS(prefix, reg, field, shift, len) \
     prefix##_##reg##_##field##_SHIFT = shift, \
@@ -436,7 +436,7 @@ static uint64_t esp8266_spi_read(void *opaque, hwaddr addr, unsigned size)
     }
 
     uint32_t ret = 0;
-    memcpy(&ret, s->reg + ESP8266_SPI_FLASH_C0, size);
+    memcpy(&ret, &s->reg[addr / 4], size);
     DEBUG_LOG("0x%08x\n", ret);
     return ret;
 }
@@ -481,7 +481,7 @@ static void esp8266_spi_cmd(Esp8266SpiState *s, hwaddr addr,
                   ESP8266_SPI_GET(s, ADDR, OFFSET) & 0xffff);
         memset(s->flash_image + (ESP8266_SPI_GET(s, ADDR, OFFSET) & ~0xffff), 0xff, 65536);
     }
-    if (val & ESP8266_SPI_FLASH_CMD_BE) {
+    if (val & ESP8266_SPI_FLASH_CMD_CE) {
         DEBUG_LOG("%s: CHIP ERASE\n",
                   __func__);
         memset(s->flash_image, 0xff, ESP8266_MAX_FLASH_SZ);
