@@ -119,6 +119,99 @@ int print_insn_xtensa(bfd_vma memaddr, struct disassemble_info *info)
                 ++vopnd;
             }
         }
+
+        info->fprintf_func(info->stream, " (");
+        int popnd = 0;
+        if (xtensa_opcode_is_branch(isa, opc)) {
+            info->fprintf_func(info->stream, "%sbranch",
+                               popnd ? ", " : "");
+            ++popnd;
+        }
+        if (xtensa_opcode_is_jump(isa, opc)) {
+            info->fprintf_func(info->stream, "%sjump",
+                               popnd ? ", " : "");
+            ++popnd;
+        }
+        if (xtensa_opcode_is_loop(isa, opc)) {
+            info->fprintf_func(info->stream, "%sloop",
+                               popnd ? ", " : "");
+            ++popnd;
+        }
+        if (xtensa_opcode_is_call(isa, opc)) {
+            info->fprintf_func(info->stream, "%scall",
+                               popnd ? ", " : "");
+            ++popnd;
+        }
+        opnds = xtensa_opcode_num_operands(isa, opc);
+        if (opnds) {
+            for (opnd = 0; opnd < opnds; ++opnd) {
+                uint32_t v = 0xbadc0de;
+                int rc;
+
+                xtensa_operand_get_field(isa, opc, opnd, fmt, slot,
+                                         slotbuf, &v);
+                rc = xtensa_operand_decode(isa, opc, opnd, &v);
+
+                if (rc == XTENSA_UNDEFINED) {
+                    info->fprintf_func(info->stream, popnd ? ", ???" : "???");
+                    ++popnd;
+                } else if (xtensa_operand_is_register(isa, opc, opnd)) {
+                    xtensa_regfile rf = xtensa_operand_regfile(isa, opc, opnd);
+                    info->fprintf_func(info->stream, "%s%s%d{%c}",
+                                       popnd ? ", " : "",
+                                       xtensa_regfile_shortname(isa, rf), v,
+                                       xtensa_operand_inout(isa, opc, opnd));
+                    ++popnd;
+                }
+            }
+        }
+        opnds = xtensa_opcode_num_stateOperands(isa, opc);
+        if (opnds) {
+            for (opnd = 0; opnd < opnds; ++opnd) {
+                xtensa_state state;
+
+                if (popnd) {
+                    info->fprintf_func(info->stream, ", ");
+                    ++popnd;
+                }
+                state = xtensa_stateOperand_state(isa, opc, opnd);
+                info->fprintf_func(info->stream, "%s{%c}",
+                                   xtensa_state_name(isa, state),
+                                   xtensa_stateOperand_inout(isa, opc, opnd));
+            }
+        }
+        opnds = xtensa_opcode_num_interfaceOperands(isa, opc);
+        if (opnds) {
+            for (opnd = 0; opnd < opnds; ++opnd) {
+                xtensa_interface intf;
+
+                if (popnd) {
+                    info->fprintf_func(info->stream, ", ");
+                    ++popnd;
+                }
+                intf = xtensa_interfaceOperand_interface(isa, opc, opnd);
+                info->fprintf_func(info->stream, "%s{%c}",
+                                   xtensa_interface_name(isa, intf),
+                                   xtensa_interface_inout(isa, intf));
+            }
+        }
+        opnds = xtensa_opcode_num_funcUnit_uses(isa, opc);
+        if (opnds) {
+            for (opnd = 0; opnd < opnds; ++opnd) {
+                xtensa_funcUnit_use *fu;
+
+                if (popnd) {
+                    info->fprintf_func(info->stream, ", ");
+                    ++popnd;
+                }
+                fu = xtensa_opcode_funcUnit_use(isa, opc, opnd);
+                info->fprintf_func(info->stream, "%s@%d",
+                                   xtensa_funcUnit_name(isa, fu->unit),
+                                   fu->stage);
+            }
+        }
+        info->fprintf_func(info->stream, ")");
+
     }
     if (slots > 1) {
         info->fprintf_func(info->stream, " }");
