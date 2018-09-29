@@ -2,6 +2,7 @@ xtensa_ss = ss.source_set()
 xtensa_ss.add(files(
   'mx_pic.c',
   'pic_cpu.c',
+  'pmu.c',
   'xtensa_memory.c',
 ))
 xtensa_ss.add(when: 'CONFIG_XTENSA_SIM', if_true: files('sim.c'))

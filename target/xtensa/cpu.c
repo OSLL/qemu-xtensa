@@ -142,6 +142,7 @@ static void xtensa_cpu_realizefn(DeviceState *dev, Error **errp)
 
 #ifndef CONFIG_USER_ONLY
     xtensa_irq_init(&XTENSA_CPU(dev)->env);
+    xtensa_pmu_init(&XTENSA_CPU(dev)->env);
 #endif
 
     cpu_exec_realizefn(cs, &local_err);
