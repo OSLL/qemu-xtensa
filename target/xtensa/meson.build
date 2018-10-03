@@ -4,6 +4,7 @@ xtensa_ss.add(files(
   'core-dc233c.c',
   'core-de212.c',
   'core-de233_fpu.c',
+  'core-de570t.c',
   'core-dsp3400.c',
   'core-fsf.c',
   'core-sample_controller.c',
