@@ -132,6 +132,9 @@ or1k_magic='\x7fELF\x01\x02\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\
 or1k_mask='\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff'
 or1k_family=or1k
 
+flat_magic='bFLT\x00\x00\x00\x04'
+flat_mask='\xff\xff\xff\xff\xff\xff\xff\xff'
+
 qemu_get_family() {
     cpu=${HOST_ARCH:-$(uname -m)}
     case "$cpu" in
@@ -170,6 +173,7 @@ usage() {
 Usage: qemu-binfmt-conf.sh [--qemu-path PATH][--debian][--systemd CPU]
                            [--help][--credential yes|no][--exportdir PATH]
                            [--persistent yes|no][--qemu-suffix SUFFIX]
+                           [--flat CPU]
 
        Configure binfmt_misc to use qemu interpreter
 
@@ -188,7 +192,9 @@ Usage: qemu-binfmt-conf.sh [--qemu-path PATH][--debian][--systemd CPU]
                       calculated according to the binary to interpret
        --persistent:  if yes, the interpreter is loaded when binfmt is
                       configured and remains in memory. All future uses
-                      are cloned from the open file.
+                      are cloned from the open file
+       --flat:        register QEMU for this CPU architecture as a handler
+                      for the bFLT executable format.
 
     To import templates with update-binfmts, use :
 
@@ -311,6 +317,13 @@ qemu_set_binfmts() {
             $BINFMT_SET
         fi
     done
+    if [ -n "$QEMU_FLAT" ] ; then
+        cpu="${QEMU_FLAT}_bflt"
+        qemu="$QEMU_PATH/qemu-$QEMU_FLAT"
+        magic=$flat_magic
+        mask=$flat_mask
+        $BINFMT_SET
+    fi
 }
 
 CHECK=qemu_check_bintfmt_misc
@@ -324,7 +337,7 @@ CREDENTIAL=no
 PERSISTENT=no
 QEMU_SUFFIX=""
 
-options=$(getopt -o ds:Q:S:e:hc:p: -l debian,systemd:,qemu-path:,qemu-suffix:,exportdir:,help,credential:,persistent: -- "$@")
+options=$(getopt -o ds:Q:S:e:hc:p:f: -l debian,systemd:,qemu-path:,qemu-suffix:,exportdir:,help,credential:,persistent:,flat: -- "$@")
 eval set -- "$options"
 
 while true ; do
@@ -379,6 +392,21 @@ while true ; do
     -p|--persistent)
         shift
         PERSISTENT="$1"
+        ;;
+    -f|--flat)
+        shift
+        QEMU_FLAT="$1"
+        for cpu in ${qemu_target_list} ; do
+            if [ "$cpu" = "$1" ] ; then
+                break
+            fi
+        done
+
+        if [ "$cpu" != "$1" ] ; then
+            echo "ERROR: unknown CPU \"$1\"" 1>&2
+            usage
+            exit 1
+        fi
         ;;
     *)
         break
