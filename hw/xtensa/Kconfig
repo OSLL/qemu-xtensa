@@ -1,3 +1,10 @@
+config XTENSA_LEON
+    bool
+    select OPENCORES_ETH
+    select PFLASH_CFI01
+    select PL011
+    select SERIAL
+
 config XTENSA_SIM
     bool
 
