@@ -1,3 +1,4 @@
+obj-y += core-cp0_latest.o
 obj-y += core-dc232b.o
 obj-y += core-dc233c.o
 obj-y += core-de212.o
