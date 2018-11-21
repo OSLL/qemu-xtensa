@@ -2252,8 +2252,8 @@ static void translate_rptlb1(DisasContext *dc, const OpcodeArg arg[],
 #endif
 }
 
-static void translate_rur(DisasContext *dc, const OpcodeArg arg[],
-                          const uint32_t par[])
+void translate_rur(DisasContext *dc, const OpcodeArg arg[],
+                   const uint32_t par[])
 {
     tcg_gen_mov_i32(arg[0].out, cpu_UR[par[0]]);
 }
@@ -2756,8 +2756,8 @@ static void translate_wsr_windowstart(DisasContext *dc, const OpcodeArg arg[],
 #endif
 }
 
-static void translate_wur(DisasContext *dc, const OpcodeArg arg[],
-                          const uint32_t par[])
+void translate_wur(DisasContext *dc, const OpcodeArg arg[],
+                   const uint32_t par[])
 {
     tcg_gen_mov_i32(cpu_UR[par[0]], arg[0].in);
 }

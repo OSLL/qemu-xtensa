@@ -423,6 +423,11 @@ typedef struct XtensaOpcodeTranslators {
 extern const XtensaOpcodeTranslators xtensa_core_opcodes;
 extern const XtensaOpcodeTranslators xtensa_fpu2000_opcodes;
 
+void translate_rur(DisasContext *dc, const OpcodeArg arg[],
+                   const uint32_t par[]);
+void translate_wur(DisasContext *dc, const OpcodeArg arg[],
+                   const uint32_t par[]);
+
 struct XtensaConfig {
     const char *name;
     uint64_t options;
