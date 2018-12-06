@@ -354,7 +354,7 @@ static XtensaConfig cp0_latest __attribute__((unused)) = {
         &xtensa_core_opcodes,
         NULL,
     },
-    .clock_freq_khz = 600000,
+    .clock_freq_khz = 10000,
     DEFAULT_SECTIONS
 };
 
