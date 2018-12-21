@@ -1,6 +1,7 @@
 obj-y += core-cp0_latest.o
 obj-y += core-dc232b.o
 obj-y += core-dc233c.o
+obj-y += core-dc233d_const16.o
 obj-y += core-de212.o
 obj-y += core-fsf.o
 obj-y += core-sample_controller.o
