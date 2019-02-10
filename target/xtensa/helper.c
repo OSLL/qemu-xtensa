@@ -119,13 +119,11 @@ static void init_libisa(XtensaConfig *config)
                                              opc_name);
             }
         }
-#ifdef DEBUG
         if (ops == NULL) {
-            fprintf(stderr,
-                    "opcode translator not found for %s's opcode '%s'\n",
-                    config->name, opc_name);
+            qemu_log_mask(LOG_UNIMP,
+                          "opcode translator not found for %s's opcode '%s'\n",
+                          config->name, opc_name);
         }
-#endif
         config->opcode_ops[i] = ops;
     }
     config->a_regfile = xtensa_regfile_lookup(config->isa, "AR");
@@ -137,12 +135,11 @@ static void init_libisa(XtensaConfig *config)
         int bits = xtensa_regfile_num_bits(config->isa, i);
 
         config->regfile[i] = xtensa_get_regfile_by_name(name, entries, bits);
-#ifdef DEBUG
         if (config->regfile[i] == NULL) {
-            fprintf(stderr, "regfile '%s' not found for %s\n",
-                    name, config->name);
+            qemu_log_mask(LOG_UNIMP,
+                          "regfile '%s' not found for %s\n",
+                          name, config->name);
         }
-#endif
     }
     xtensa_collect_sr_names(config);
 }
