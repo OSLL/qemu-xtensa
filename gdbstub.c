@@ -43,7 +43,7 @@
 #include "hw/boards.h"
 #endif
 
-#define MAX_PACKET_LENGTH 4096
+#define MAX_PACKET_LENGTH 16384
 
 #include "qemu/sockets.h"
 #include "sysemu/hw_accel.h"
