@@ -3,4 +3,5 @@ obj-y += pic_cpu.o
 obj-y += xtensa_memory.o
 obj-$(CONFIG_XTENSA_SIM) += sim.o
 obj-$(CONFIG_XTENSA_VIRT) += virt.o
+obj-$(CONFIG_XTENSA_XRP_SIMPLE) += xrp_simple.o
 obj-$(CONFIG_XTENSA_XTFPGA) += xtfpga.o

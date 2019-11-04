@@ -7,6 +7,9 @@ config XTENSA_VIRT
     select PCI_EXPRESS_GENERIC_BRIDGE
     select PCI_DEVICES
 
+config XTENSA_XRP_SIMPLE
+    bool
+
 config XTENSA_XTFPGA
     bool
     select OPENCORES_ETH
