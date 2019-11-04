@@ -9,6 +9,7 @@ xtensa_ss.add(files(
   'core-sample_controller.c',
   'core-test_kc705_be.c',
   'core-test_mmuhifi_c3.c',
+  'core-visionp6_ao.c',
   'core-visionp6cnn_ao_exls.c',
   'cpu.c',
   'exc_helper.c',
