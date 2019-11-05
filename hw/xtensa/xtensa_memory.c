@@ -33,7 +33,7 @@
 #include "xtensa_memory.h"
 
 void xtensa_create_memory_regions(const XtensaMemory *memory,
-                                  const char *name,
+                                  const char *name, int cpu,
                                   MemoryRegion *super)
 {
     unsigned i;
@@ -42,7 +42,11 @@ void xtensa_create_memory_regions(const XtensaMemory *memory,
     for (i = 0; i < memory->num; ++i) {
         MemoryRegion *m;
 
-        g_string_printf(num_name, "%s%u", name, i);
+        if (cpu >= 0)
+            g_string_printf(num_name, "%s%u-cpu%u", name, i, cpu);
+        else
+            g_string_printf(num_name, "%s%u", name, i);
+
         m = g_new(MemoryRegion, 1);
         memory_region_init_ram(m, NULL, num_name->str,
                                memory->location[i].size, &error_fatal);

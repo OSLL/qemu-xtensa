@@ -159,6 +159,7 @@ static void xtensa_cpu_realizefn(DeviceState *dev, Error **errp)
 
 static void xtensa_cpu_initfn(Object *obj)
 {
+    CPUState *cs __attribute__((unused));
     XtensaCPU *cpu = XTENSA_CPU(obj);
     XtensaCPUClass *xcc = XTENSA_CPU_GET_CLASS(obj);
     CPUXtensaState *env = &cpu->env;
@@ -172,6 +173,9 @@ static void xtensa_cpu_initfn(Object *obj)
     memory_region_init_io(env->system_er, obj, NULL, env, "er",
                           UINT64_C(0x100000000));
     address_space_init(env->address_space_er, env->system_er, "ER");
+    cs = CPU(obj);
+    cs->memory = g_malloc(sizeof(*cs->memory));
+    memory_region_init(cs->memory, NULL, "local", UINT64_C(0x100000000));
 #endif
 }
 

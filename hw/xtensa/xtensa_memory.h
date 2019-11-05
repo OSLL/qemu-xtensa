@@ -31,7 +31,7 @@
 #include "cpu.h"
 
 void xtensa_create_memory_regions(const XtensaMemory *memory,
-                                  const char *name,
+                                  const char *name, int cpu,
                                   MemoryRegion *super);
 
 #endif

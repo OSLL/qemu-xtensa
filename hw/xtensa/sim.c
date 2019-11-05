@@ -61,8 +61,26 @@ XtensaCPU *xtensa_sim_common_init(MachineState *machine)
     int n;
 
     for (n = 0; n < machine->smp.cpus; n++) {
-        cpu = XTENSA_CPU(cpu_create(machine->cpu_type));
+        CPUState *cs = cpu_create(machine->cpu_type);
+        MemoryRegion *system_alias = g_malloc(sizeof(*system_alias));
+
+        cpu = XTENSA_CPU(cs);
         env = &cpu->env;
+        memory_region_init_alias(system_alias, NULL, "system",
+                                 get_system_memory(),
+                                 0, UINT64_C(0x100000000));
+        memory_region_add_subregion_overlap(cs->memory,
+                                            0, system_alias, -1);
+
+        xtensa_create_memory_regions(&env->config->instrom, "xtensa.instrom",
+                                     n, cs->memory);
+        xtensa_create_memory_regions(&env->config->instram, "xtensa.instram",
+                                     n, cs->memory);
+        xtensa_create_memory_regions(&env->config->datarom, "xtensa.datarom",
+                                     n, cs->memory);
+        xtensa_create_memory_regions(&env->config->dataram, "xtensa.dataram",
+                                     n, cs->memory);
+
 
         env->sregs[PRID] = n;
         qemu_register_reset(sim_reset, cpu);
@@ -76,18 +94,10 @@ XtensaCPU *xtensa_sim_common_init(MachineState *machine)
         XtensaMemory sysram = env->config->sysram;
 
         sysram.location[0].size = ram_size;
-        xtensa_create_memory_regions(&env->config->instrom, "xtensa.instrom",
-                                     get_system_memory());
-        xtensa_create_memory_regions(&env->config->instram, "xtensa.instram",
-                                     get_system_memory());
-        xtensa_create_memory_regions(&env->config->datarom, "xtensa.datarom",
-                                     get_system_memory());
-        xtensa_create_memory_regions(&env->config->dataram, "xtensa.dataram",
-                                     get_system_memory());
         xtensa_create_memory_regions(&env->config->sysrom, "xtensa.sysrom",
-                                     get_system_memory());
+                                     -1, get_system_memory());
         xtensa_create_memory_regions(&sysram, "xtensa.sysram",
-                                     get_system_memory());
+                                     -1, get_system_memory());
     }
     if (serial_hd(0)) {
         xtensa_sim_open_console(serial_hd(0));
