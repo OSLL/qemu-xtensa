@@ -248,10 +248,27 @@ static void xtfpga_init(const XtfpgaBoardDesc *board, MachineState *machine)
         qemu_register_reset(xtensa_mx_pic_reset, mx_pic);
     }
     for (n = 0; n < smp_cpus; n++) {
+        CPUState *cs = cpu_create(machine->cpu_type);
         CPUXtensaState *cenv = NULL;
+        MemoryRegion *system_alias = g_malloc(sizeof(*system_alias));
 
-        cpu = XTENSA_CPU(cpu_create(machine->cpu_type));
+        cpu = XTENSA_CPU(cs);
         cenv = &cpu->env;
+        memory_region_init_alias(system_alias, NULL, "system",
+                                 get_system_memory(),
+                                 0, UINT64_C(0x100000000));
+        memory_region_add_subregion_overlap(cs->memory,
+                                            0, system_alias, -1);
+
+        xtensa_create_memory_regions(&cenv->config->instrom, "xtensa.instrom",
+                                     n, cs->memory);
+        xtensa_create_memory_regions(&cenv->config->instram, "xtensa.instram",
+                                     n, cs->memory);
+        xtensa_create_memory_regions(&cenv->config->datarom, "xtensa.datarom",
+                                     n, cs->memory);
+        xtensa_create_memory_regions(&cenv->config->dataram, "xtensa.dataram",
+                                     n, cs->memory);
+
         if (!env) {
             env = cenv;
             freq = env->config->clock_freq_khz * 1000;
@@ -272,7 +289,7 @@ static void xtfpga_init(const XtfpgaBoardDesc *board, MachineState *machine)
         /* Need MMU initialized prior to ELF loading,
          * so that ELF gets loaded into virtual addresses
          */
-        cpu_reset(CPU(cpu));
+        cpu_reset(cs);
     }
     if (smp_cpus > 1) {
         extints = xtensa_mx_pic_get_extints(mx_pic);
@@ -284,16 +301,8 @@ static void xtfpga_init(const XtfpgaBoardDesc *board, MachineState *machine)
         XtensaMemory sysram = env->config->sysram;
 
         sysram.location[0].size = machine->ram_size;
-        xtensa_create_memory_regions(&env->config->instrom, "xtensa.instrom",
-                                     system_memory);
-        xtensa_create_memory_regions(&env->config->instram, "xtensa.instram",
-                                     system_memory);
-        xtensa_create_memory_regions(&env->config->datarom, "xtensa.datarom",
-                                     system_memory);
-        xtensa_create_memory_regions(&env->config->dataram, "xtensa.dataram",
-                                     system_memory);
         xtensa_create_memory_regions(&sysram, "xtensa.sysram",
-                                     system_memory);
+                                     -1, system_memory);
     }
 
     system_io = g_malloc(sizeof(*system_io));
@@ -342,7 +351,7 @@ static void xtfpga_init(const XtfpgaBoardDesc *board, MachineState *machine)
         cur_lowmem += env->config->sysram.location[0].addr;
 
         xtensa_create_memory_regions(&env->config->sysrom, "xtensa.sysrom",
-                                     system_memory);
+                                     -1, system_memory);
 
         if (kernel_cmdline) {
             bp_size += get_tag_size(strlen(kernel_cmdline) + 1);
@@ -477,7 +486,7 @@ static void xtfpga_init(const XtfpgaBoardDesc *board, MachineState *machine)
                                         flash_io);
         } else {
             xtensa_create_memory_regions(&env->config->sysrom, "xtensa.sysrom",
-                                         system_memory);
+                                         -1, system_memory);
         }
     }
 }
