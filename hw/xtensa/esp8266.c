@@ -372,6 +372,10 @@ enum {
 
 enum {
     ESP8266_SPI_FLASH_BITS(CMD, USR, 18, 1),
+    ESP8266_SPI_FLASH_BITS(CMD, CE, 22, 1),
+    ESP8266_SPI_FLASH_BITS(CMD, BE, 23, 1),
+    ESP8266_SPI_FLASH_BITS(CMD, SE, 24, 1),
+    ESP8266_SPI_FLASH_BITS(CMD, PP, 25, 1),
     ESP8266_SPI_FLASH_BITS(CMD, WRDI, 29, 1),
     ESP8266_SPI_FLASH_BITS(CMD, WREN, 30, 1),
     ESP8266_SPI_FLASH_BITS(CMD, READ, 31, 1),
@@ -422,12 +426,19 @@ static uint64_t esp8266_spi_read(void *opaque, hwaddr addr, unsigned size)
     Esp8266SpiState *s = opaque;
 
     DEBUG_LOG("%s: +0x%02x: ", __func__, (uint32_t)addr);
-    if (addr / 4 >= ESP8266_SPI_MAX || addr % 4 || size != 4) {
+    if (addr / 4 >= ESP8266_SPI_MAX || addr % 4 || size > 4) {
         DEBUG_LOG("0\n");
         return 0;
     }
-    DEBUG_LOG("0x%08x\n", s->reg[addr / 4]);
-    return s->reg[addr / 4];
+    else if (size == 4) {
+        DEBUG_LOG("0x%08x\n", s->reg[addr / 4]);
+        return s->reg[addr / 4];
+    }
+
+    uint32_t ret = 0;
+    memcpy(&ret, &s->reg[addr / 4], size);
+    DEBUG_LOG("0x%08x\n", ret);
+    return ret;
 }
 
 static void esp8266_spi_cmd(Esp8266SpiState *s, hwaddr addr,
@@ -457,6 +468,32 @@ static void esp8266_spi_cmd(Esp8266SpiState *s, hwaddr addr,
                   __func__,
                   ESP8266_SPI_GET(s, USER2, COMMAND_VALUE),
                   ESP8266_SPI_GET(s, USER2, COMMAND_BITLEN));
+    }
+    if (val & ESP8266_SPI_FLASH_CMD_SE) {
+        DEBUG_LOG("%s: SECTOR ERASE @0x%08x\n",
+                  __func__,
+                  ESP8266_SPI_GET(s, ADDR, OFFSET) & 0xfff);
+        memset(s->flash_image + (ESP8266_SPI_GET(s, ADDR, OFFSET) & ~0xfff), 0xff, 4096);
+    }
+    if (val & ESP8266_SPI_FLASH_CMD_BE) {
+        DEBUG_LOG("%s: BLOCK ERASE @0x%08x\n",
+                  __func__,
+                  ESP8266_SPI_GET(s, ADDR, OFFSET) & 0xffff);
+        memset(s->flash_image + (ESP8266_SPI_GET(s, ADDR, OFFSET) & ~0xffff), 0xff, 65536);
+    }
+    if (val & ESP8266_SPI_FLASH_CMD_CE) {
+        DEBUG_LOG("%s: CHIP ERASE\n",
+                  __func__);
+        memset(s->flash_image, 0xff, ESP8266_MAX_FLASH_SZ);
+    }
+    if (val & ESP8266_SPI_FLASH_CMD_PP) {
+        DEBUG_LOG("%s: WRITE FLASH 0x%02x@0x%08x\n",
+                  __func__,
+                  ESP8266_SPI_GET(s, ADDR, LENGTH),
+                  ESP8266_SPI_GET(s, ADDR, OFFSET));
+        memcpy(s->flash_image + ESP8266_SPI_GET(s, ADDR, OFFSET),
+               s->reg + ESP8266_SPI_FLASH_C0,
+               (ESP8266_SPI_GET(s, ADDR, LENGTH) + 3) & 0x3c);
     }
 }
 
