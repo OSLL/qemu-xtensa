@@ -3204,6 +3204,7 @@ static const XtensaOpcodeOps core_ops[] = {
     }, {
         .name = "clrb_expstate",
         .translate = translate_clrb_expstate,
+        .coprocessor = 0x80,
     }, {
         .name = "clrex",
         .translate = translate_clrex,
@@ -4676,6 +4677,7 @@ static const XtensaOpcodeOps core_ops[] = {
         .name = "rur.expstate",
         .translate = translate_rur,
         .par = (const uint32_t[]){EXPSTATE},
+        .coprocessor = 0x80,
     }, {
         .name = "rur.threadptr",
         .translate = translate_rur,
@@ -4725,6 +4727,7 @@ static const XtensaOpcodeOps core_ops[] = {
     }, {
         .name = "setb_expstate",
         .translate = translate_setb_expstate,
+        .coprocessor = 0x80,
     }, {
         .name = "sext",
         .translate = translate_sext,
@@ -4828,6 +4831,7 @@ static const XtensaOpcodeOps core_ops[] = {
     }, {
         .name = "wrmsk_expstate",
         .translate = translate_wrmsk_expstate,
+        .coprocessor = 0x80,
     }, {
         .name = "wsr.176",
         .op_flags = XTENSA_OP_ILL,
@@ -5582,6 +5586,7 @@ static const XtensaOpcodeOps core_ops[] = {
         .name = "wur.expstate",
         .translate = translate_wur,
         .par = (const uint32_t[]){EXPSTATE},
+        .coprocessor = 0x80,
     }, {
         .name = "wur.threadptr",
         .translate = translate_wur,
