@@ -33,19 +33,6 @@
 #include "exec/exec-all.h"
 #include "exec/address-spaces.h"
 
-static void tb_invalidate_virtual_addr(CPUXtensaState *env, uint32_t vaddr)
-{
-    uint32_t paddr;
-    uint32_t page_size;
-    unsigned access;
-    int ret = xtensa_get_physical_addr(env, false, vaddr, 2, 0,
-                                       &paddr, &page_size, &access);
-    if (ret == 0) {
-        tb_invalidate_phys_addr(&address_space_memory, paddr,
-                                MEMTXATTRS_UNSPECIFIED);
-    }
-}
-
 void HELPER(wsr_ibreakenable)(CPUXtensaState *env, uint32_t v)
 {
     uint32_t change = v ^ env->sregs[IBREAKENABLE];
@@ -53,7 +40,8 @@ void HELPER(wsr_ibreakenable)(CPUXtensaState *env, uint32_t v)
 
     for (i = 0; i < env->config->nibreak; ++i) {
         if (change & (1 << i)) {
-            tb_invalidate_virtual_addr(env, env->sregs[IBREAKA + i]);
+            tb_flush(env_cpu(env));
+            break;
         }
     }
     env->sregs[IBREAKENABLE] = v & ((1 << env->config->nibreak) - 1);
@@ -62,8 +50,7 @@ void HELPER(wsr_ibreakenable)(CPUXtensaState *env, uint32_t v)
 void HELPER(wsr_ibreaka)(CPUXtensaState *env, uint32_t i, uint32_t v)
 {
     if (env->sregs[IBREAKENABLE] & (1 << i) && env->sregs[IBREAKA + i] != v) {
-        tb_invalidate_virtual_addr(env, env->sregs[IBREAKA + i]);
-        tb_invalidate_virtual_addr(env, v);
+        tb_flush(env_cpu(env));
     }
     env->sregs[IBREAKA + i] = v;
 }
