@@ -7,6 +7,7 @@ xtensa_ss.add(files(
   'core-dsp3400.c',
   'core-fsf.c',
   'core-sample_controller.c',
+  'core-sample_controller32.c',
   'core-test_kc705_be.c',
   'core-test_mmuhifi_c3.c',
   'core-visionp6_ao.c',
