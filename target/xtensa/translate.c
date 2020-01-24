@@ -4735,7 +4735,7 @@ static const XtensaOpcodeOps core_ops[] = {
         .name = "simcall",
         .translate = translate_simcall,
         .test_exceptions = test_exceptions_simcall,
-        .op_flags = XTENSA_OP_PRIVILEGED,
+        //.op_flags = XTENSA_OP_PRIVILEGED,
     }, {
         .name = "sll",
         .translate = translate_sll,
