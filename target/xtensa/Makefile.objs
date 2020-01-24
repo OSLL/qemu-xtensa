@@ -1,6 +1,7 @@
 obj-y += core-dc232b.o
 obj-y += core-dc233c.o
 obj-y += core-de212.o
+obj-y += core-de233_fpu.o
 obj-y += core-fsf.o
 obj-y += core-sample_controller.o
 obj-y += core-test_kc705_be.o
