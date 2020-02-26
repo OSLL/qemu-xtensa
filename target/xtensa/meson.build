@@ -6,6 +6,7 @@ xtensa_ss.add(files(
   'core-de233_fpu.c',
   'core-dsp3400.c',
   'core-fsf.c',
+  'core-hifi4_bd5.c',
   'core-sample_controller.c',
   'core-sample_controller32.c',
   'core-test_kc705_be.c',
