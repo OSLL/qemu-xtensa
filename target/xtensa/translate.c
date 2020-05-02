@@ -1598,6 +1598,30 @@ static void translate_bp(DisasContext *dc, const OpcodeArg arg[],
     tcg_temp_free(tmp);
 }
 
+static uint32_t test_exceptions_break(DisasContext *dc, const OpcodeArg arg[],
+                                      const uint32_t par[])
+{
+#ifndef CONFIG_USER_ONLY
+    if (arg[0].imm == 1 && arg[1].imm == 14 && semihosting_enabled()) {
+        return 0;
+    } else {
+        return XTENSA_OP_DEBUG_BREAK;
+    }
+#else
+    return XTENSA_OP_DEBUG_BREAK;
+#endif
+}
+
+static void translate_break(DisasContext *dc, const OpcodeArg arg[],
+                            const uint32_t par[])
+{
+#ifndef CONFIG_USER_ONLY
+    if (arg[0].imm == 1 && arg[1].imm == 14 && semihosting_enabled()) {
+        gen_helper_simcall_gdbio(cpu_env);
+    }
+#endif
+}
+
 static void translate_call0(DisasContext *dc, const OpcodeArg arg[],
                             const uint32_t par[])
 {
@@ -3156,9 +3180,9 @@ static const XtensaOpcodeOps core_ops[] = {
         .op_flags = XTENSA_OP_NAME_ARRAY,
     }, {
         .name = "break",
-        .translate = translate_nop,
+        .translate = translate_break,
+        .test_exceptions = test_exceptions_break,
         .par = (const uint32_t[]){DEBUGCAUSE_BI},
-        .op_flags = XTENSA_OP_DEBUG_BREAK,
     }, {
         .name = "break.n",
         .translate = translate_nop,
