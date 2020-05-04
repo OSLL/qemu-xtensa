@@ -37,6 +37,7 @@
 #include "exec/memory.h"
 #include "exec/address-spaces.h"
 #include "hw/char/serial.h"
+#include "hw/semihosting/semihost.h"
 #include "net/net.h"
 #include "hw/sysbus.h"
 #include "hw/block/flash.h"
@@ -315,6 +316,10 @@ static void xtfpga_init(const XtfpgaBoardDesc *board, MachineState *machine)
 
     serial_mm_init(system_io, 0x0d050020, 2, extints[0],
                    115200, serial_hd(0), DEVICE_NATIVE_ENDIAN);
+
+    if (semihosting_enabled() && semihosting_get_chardev()) {
+        xtensa_sim_open_console(semihosting_get_chardev());
+    }
 
     dinfo = drive_get(IF_PFLASH, 0, 0);
     if (dinfo) {

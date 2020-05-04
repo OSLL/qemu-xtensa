@@ -4267,8 +4267,10 @@ void qemu_init(int argc, char **argv, char **envp)
     qemu_opts_foreach(qemu_find_opts("mon"),
                       mon_init_func, NULL, &error_fatal);
 
+#if !defined(TARGET_XTENSA)
     /* connect semihosting console input if requested */
     qemu_semihosting_console_init();
+#endif
 
     if (foreach_device_config(DEV_SERIAL, serial_parse) < 0)
         exit(1);
