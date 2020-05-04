@@ -13,6 +13,7 @@ DEF_HELPER_1(restore_owb, void, env)
 DEF_HELPER_2(movsp, void, env, i32)
 #ifndef CONFIG_USER_ONLY
 DEF_HELPER_1(simcall, void, env)
+DEF_HELPER_1(simcall_gdbio, void, env)
 #endif
 
 #ifndef CONFIG_USER_ONLY

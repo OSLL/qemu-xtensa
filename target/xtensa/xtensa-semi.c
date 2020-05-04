@@ -49,6 +49,14 @@ enum {
 };
 
 enum {
+    TARGET_GDBIO_open = -2,
+    TARGET_GDBIO_close = -3,
+    TARGET_GDBIO_read = -4,
+    TARGET_GDBIO_write = -5,
+    TARGET_GDBIO_lseek = -6,
+};
+
+enum {
     SELECT_ONE_READ   = 1,
     SELECT_ONE_WRITE  = 2,
     SELECT_ONE_EXCEPT = 3,
@@ -194,6 +202,135 @@ void xtensa_sim_open_console(Chardev *chr)
     sim_console = &console;
 }
 
+static void sim_read_write(CPUXtensaState *env,
+                           bool is_write,
+                           uint32_t fd,
+                           uint32_t vaddr,
+                           uint32_t len)
+{
+    CPUState *cs = env_cpu(env);
+    uint32_t *regs = env->regs;
+    uint32_t len_done = 0;
+
+    while (len > 0) {
+        hwaddr paddr = cpu_get_phys_page_debug(cs, vaddr);
+        uint32_t page_left =
+            TARGET_PAGE_SIZE - (vaddr & (TARGET_PAGE_SIZE - 1));
+        uint32_t io_sz = page_left < len ? page_left : len;
+        hwaddr sz = io_sz;
+        void *buf = cpu_physical_memory_map(paddr, &sz, !is_write);
+        uint32_t io_done;
+        bool error = false;
+
+        if (buf) {
+            vaddr += io_sz;
+            len -= io_sz;
+            if (fd < 3 && sim_console) {
+                if (is_write && (fd == 1 || fd == 2)) {
+                    io_done = qemu_chr_fe_write_all(&sim_console->be,
+                                                    buf, io_sz);
+                    regs[3] = errno_h2g(errno);
+                } else if (!is_write && fd == 0) {
+                    if (sim_console->input.offset) {
+                        io_done = sim_console->input.offset;
+                        if (io_sz < io_done) {
+                            io_done = io_sz;
+                        }
+                        memcpy(buf, sim_console->input.buffer, io_done);
+                        memmove(sim_console->input.buffer,
+                                sim_console->input.buffer + io_done,
+                                sim_console->input.offset - io_done);
+                        sim_console->input.offset -= io_done;
+                        qemu_chr_fe_accept_input(&sim_console->be);
+                    } else {
+                        io_done = -1;
+                        regs[3] = TARGET_EAGAIN;
+                    }
+                } else {
+                    qemu_log_mask(LOG_GUEST_ERROR,
+                                  "%s fd %d is not supported with chardev console\n",
+                                  is_write ?
+                                  "writing to" : "reading from", fd);
+                    io_done = -1;
+                    regs[3] = TARGET_EBADF;
+                }
+            } else {
+                io_done = is_write ?
+                    write(fd, buf, io_sz) :
+                    read(fd, buf, io_sz);
+                regs[3] = errno_h2g(errno);
+            }
+            if (io_done == -1) {
+                error = true;
+                io_done = 0;
+            }
+            cpu_physical_memory_unmap(buf, sz, !is_write, io_done);
+        } else {
+            error = true;
+            regs[3] = TARGET_EINVAL;
+            break;
+        }
+        if (error) {
+            if (!len_done) {
+                len_done = -1;
+            }
+            break;
+        }
+        len_done += io_done;
+        if (io_done < io_sz) {
+            break;
+        }
+    }
+    regs[2] = len_done;
+}
+
+static void sim_open(CPUXtensaState *env, uint32_t pname,
+                     uint32_t flags, uint32_t mode)
+{
+    CPUState *cs = env_cpu(env);
+    uint32_t *regs = env->regs;
+    char name[1024];
+    int rc;
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(name); ++i) {
+        rc = cpu_memory_rw_debug(cs, pname + i,
+                                 (uint8_t *)name + i, 1, 0);
+        if (rc != 0 || name[i] == 0) {
+            break;
+        }
+    }
+
+    if (rc == 0 && i < ARRAY_SIZE(name)) {
+        regs[2] = open(name, flags, mode);
+        regs[3] = errno_h2g(errno);
+    } else {
+        regs[2] = -1;
+        regs[3] = TARGET_EINVAL;
+    }
+}
+
+static void sim_close(CPUXtensaState *env, uint32_t fd)
+{
+    uint32_t *regs = env->regs;
+
+    if (fd < 3) {
+        regs[2] = regs[3] = 0;
+    } else {
+        regs[2] = close(fd);
+        regs[3] = errno_h2g(errno);
+    }
+}
+
+static void sim_lseek(CPUXtensaState *env, uint32_t fd,
+                      uint32_t off, uint32_t whence)
+{
+    uint32_t *regs = env->regs;
+
+    regs[2] = lseek(fd, (off_t)(int32_t)off, whence);
+    regs[3] = errno_h2g(errno);
+}
+
 void HELPER(simcall)(CPUXtensaState *env)
 {
     CPUState *cs = env_cpu(env);
@@ -206,122 +343,20 @@ void HELPER(simcall)(CPUXtensaState *env)
 
     case TARGET_SYS_read:
     case TARGET_SYS_write:
-        {
-            bool is_write = regs[2] == TARGET_SYS_write;
-            uint32_t fd = regs[3];
-            uint32_t vaddr = regs[4];
-            uint32_t len = regs[5];
-            uint32_t len_done = 0;
-
-            while (len > 0) {
-                hwaddr paddr = cpu_get_phys_page_debug(cs, vaddr);
-                uint32_t page_left =
-                    TARGET_PAGE_SIZE - (vaddr & (TARGET_PAGE_SIZE - 1));
-                uint32_t io_sz = page_left < len ? page_left : len;
-                hwaddr sz = io_sz;
-                void *buf = cpu_physical_memory_map(paddr, &sz, !is_write);
-                uint32_t io_done;
-                bool error = false;
-
-                if (buf) {
-                    vaddr += io_sz;
-                    len -= io_sz;
-                    if (fd < 3 && sim_console) {
-                        if (is_write && (fd == 1 || fd == 2)) {
-                            io_done = qemu_chr_fe_write_all(&sim_console->be,
-                                                            buf, io_sz);
-                            regs[3] = errno_h2g(errno);
-                        } else if (!is_write && fd == 0) {
-                            if (sim_console->input.offset) {
-                                io_done = sim_console->input.offset;
-                                if (io_sz < io_done) {
-                                    io_done = io_sz;
-                                }
-                                memcpy(buf, sim_console->input.buffer, io_done);
-                                memmove(sim_console->input.buffer,
-                                        sim_console->input.buffer + io_done,
-                                        sim_console->input.offset - io_done);
-                                sim_console->input.offset -= io_done;
-                                qemu_chr_fe_accept_input(&sim_console->be);
-                            } else {
-                                io_done = -1;
-                                regs[3] = TARGET_EAGAIN;
-                            }
-                        } else {
-                            qemu_log_mask(LOG_GUEST_ERROR,
-                                          "%s fd %d is not supported with chardev console\n",
-                                          is_write ?
-                                          "writing to" : "reading from", fd);
-                            io_done = -1;
-                            regs[3] = TARGET_EBADF;
-                        }
-                    } else {
-                        io_done = is_write ?
-                            write(fd, buf, io_sz) :
-                            read(fd, buf, io_sz);
-                        regs[3] = errno_h2g(errno);
-                    }
-                    if (io_done == -1) {
-                        error = true;
-                        io_done = 0;
-                    }
-                    cpu_physical_memory_unmap(buf, sz, !is_write, io_done);
-                } else {
-                    error = true;
-                    regs[3] = TARGET_EINVAL;
-                    break;
-                }
-                if (error) {
-                    if (!len_done) {
-                        len_done = -1;
-                    }
-                    break;
-                }
-                len_done += io_done;
-                if (io_done < io_sz) {
-                    break;
-                }
-            }
-            regs[2] = len_done;
-        }
+        sim_read_write(env, regs[2] == TARGET_SYS_write,
+                       regs[3], regs[4], regs[5]);
         break;
 
     case TARGET_SYS_open:
-        {
-            char name[1024];
-            int rc;
-            int i;
-
-            for (i = 0; i < ARRAY_SIZE(name); ++i) {
-                rc = cpu_memory_rw_debug(cs, regs[3] + i,
-                                         (uint8_t *)name + i, 1, 0);
-                if (rc != 0 || name[i] == 0) {
-                    break;
-                }
-            }
-
-            if (rc == 0 && i < ARRAY_SIZE(name)) {
-                regs[2] = open(name, regs[4], regs[5]);
-                regs[3] = errno_h2g(errno);
-            } else {
-                regs[2] = -1;
-                regs[3] = TARGET_EINVAL;
-            }
-        }
+        sim_open(env, regs[3], regs[4], regs[5]);
         break;
 
     case TARGET_SYS_close:
-        if (regs[3] < 3) {
-            regs[2] = regs[3] = 0;
-        } else {
-            regs[2] = close(regs[3]);
-            regs[3] = errno_h2g(errno);
-        }
+        sim_close(env, regs[3]);
         break;
 
     case TARGET_SYS_lseek:
-        regs[2] = lseek(regs[3], (off_t)(int32_t)regs[4], regs[5]);
-        regs[3] = errno_h2g(errno);
+        sim_lseek(env, regs[3], regs[4], regs[5]);
         break;
 
     case TARGET_SYS_select_one:
@@ -432,6 +467,37 @@ void HELPER(simcall)(CPUXtensaState *env)
             regs[2] = regs[3];
             regs[3] = 0;
         }
+        break;
+
+    default:
+        qemu_log_mask(LOG_GUEST_ERROR, "%s(%d): not implemented\n", __func__, regs[2]);
+        regs[2] = -1;
+        regs[3] = TARGET_ENOSYS;
+        break;
+    }
+}
+
+void HELPER(simcall_gdbio)(CPUXtensaState *env)
+{
+    uint32_t *regs = env->regs;
+
+    switch (regs[2]) {
+    case TARGET_GDBIO_open:
+        sim_open(env, regs[6], regs[3], regs[4]);
+        break;
+
+    case TARGET_GDBIO_close:
+        sim_close(env, regs[6]);
+        break;
+
+    case TARGET_GDBIO_read:
+    case TARGET_GDBIO_write:
+        sim_read_write(env, regs[2] == TARGET_GDBIO_write,
+                       regs[6], regs[3], regs[4]);
+        break;
+
+    case TARGET_GDBIO_lseek:
+        sim_lseek(env, regs[6], regs[3], regs[4]);
         break;
 
     default:
