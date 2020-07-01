@@ -52,6 +52,7 @@ enum {
     XTENSA_OPTION_COPROCESSOR,
     XTENSA_OPTION_BOOLEAN,
     XTENSA_OPTION_FP_COPROCESSOR,
+    XTENSA_OPTION_DFP_COPROCESSOR,
     XTENSA_OPTION_MP_SYNCHRO,
     XTENSA_OPTION_CONDITIONAL_STORE,
     XTENSA_OPTION_ATOMCTL,
@@ -420,6 +421,7 @@ typedef struct XtensaOpcodeTranslators {
 
 extern const XtensaOpcodeTranslators xtensa_core_opcodes;
 extern const XtensaOpcodeTranslators xtensa_fpu2000_opcodes;
+extern const XtensaOpcodeTranslators xtensa_fpu_opcodes;
 
 struct XtensaConfig {
     const char *name;
@@ -482,6 +484,8 @@ struct XtensaConfig {
     unsigned n_mpu_fg_segments;
     unsigned n_mpu_bg_segments;
     const xtensa_mpu_entry *mpu_bg;
+
+    bool use_first_nan;
 };
 
 typedef struct XtensaConfigList {
