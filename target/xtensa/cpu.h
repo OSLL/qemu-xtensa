@@ -30,6 +30,7 @@
 
 #include "cpu-qom.h"
 #include "exec/cpu-defs.h"
+#include "hw/clock.h"
 #include "xtensa-isa.h"
 
 /* Xtensa processors have a weak memory model */
@@ -558,6 +559,7 @@ struct ArchCPU {
     CPUState parent_obj;
     /*< public >*/
 
+    Clock *clock;
     CPUNegativeOffsetState neg;
     CPUXtensaState env;
 };
@@ -791,5 +793,8 @@ static inline void cpu_get_tb_cpu_state(CPUXtensaState *env, target_ulong *pc,
         *flags |= XTENSA_TBFLAG_YIELD;
     }
 }
+
+XtensaCPU *xtensa_cpu_create_with_clock(const char *cpu_type,
+                                        Clock *cpu_refclk);
 
 #endif
