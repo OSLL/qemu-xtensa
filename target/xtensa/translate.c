@@ -5333,6 +5333,15 @@ static const XtensaOpcodeOps core_ops[] = {
         },
         .op_flags = XTENSA_OP_PRIVILEGED,
     }, {
+        .name = "wsr.mpucfg",
+        .translate = translate_nop,
+        .test_exceptions = test_exceptions_sr,
+        .par = (const uint32_t[]){
+            MPUCFG,
+            XTENSA_OPTION_MPU,
+        },
+        .op_flags = XTENSA_OP_PRIVILEGED,
+    }, {
         .name = "wsr.mpuenb",
         .translate = translate_wsr_mpuenb,
         .test_exceptions = test_exceptions_sr,
