@@ -304,7 +304,7 @@ clean:
 	rm -f $$d/qemu-options.def; \
         done
 
-VERSION ?= $(shell cat VERSION)
+VERSION ?= $(shell cat VERSION.txt)
 
 dist: qemu-$(VERSION).tar.bz2
 

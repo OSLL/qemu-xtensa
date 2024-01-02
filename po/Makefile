@@ -17,7 +17,7 @@ include $(SRC_PATH)/rules.mak
 
 PO_PATH=$(SRC_PATH)/po
 
-VERSION=$(shell cat $(SRC_PATH)/VERSION)
+VERSION=$(shell cat $(SRC_PATH)/VERSION.txt)
 SRCS=$(filter-out $(PO_PATH)/messages.po,$(wildcard $(PO_PATH)/*.po))
 OBJS=$(patsubst $(PO_PATH)/%.po,%.mo,$(SRCS))
 
