@@ -727,7 +727,7 @@ for opt do
   case "$opt" in
   --help|-h) show_help=yes
   ;;
-  --version|-V) exec cat $source_path/VERSION
+  --version|-V) exec cat $source_path/VERSION.txt
   ;;
   --prefix=*) prefix="$optarg"
   ;;
@@ -1419,7 +1419,7 @@ fi
 
 # Consult white-list to determine whether to enable werror
 # by default.  Only enable by default for git builds
-z_version=`cut -f3 -d. $source_path/VERSION`
+z_version=`cut -f3 -d. $source_path/VERSION.txt`
 
 if test -z "$werror" ; then
     if test -d "$source_path/.git" -a \
@@ -4386,7 +4386,7 @@ if test "$bigendian" = "yes" ; then
 fi
 if test "$mingw32" = "yes" ; then
   echo "CONFIG_WIN32=y" >> $config_host_mak
-  rc_version=`cat $source_path/VERSION`
+  rc_version=`cat $source_path/VERSION.txt`
   version_major=${rc_version%%.*}
   rc_version=${rc_version#*.}
   version_minor=${rc_version%%.*}
@@ -4491,7 +4491,7 @@ fi
 if test "$xfs" = "yes" ; then
   echo "CONFIG_XFS=y" >> $config_host_mak
 fi
-qemu_version=`head $source_path/VERSION`
+qemu_version=`head $source_path/VERSION.txt`
 echo "VERSION=$qemu_version" >>$config_host_mak
 echo "PKGVERSION=$pkgversion" >>$config_host_mak
 echo "SRC_PATH=$source_path" >> $config_host_mak

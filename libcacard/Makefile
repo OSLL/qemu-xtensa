@@ -25,7 +25,7 @@ libcacard.la: $(libcacard-lobj-y)
 libcacard.pc: $(SRC_PATH)/libcacard/libcacard.pc.in
 	$(call quiet-command,sed -e 's|@LIBDIR@|$(libdir)|' \
 		-e 's|@INCLUDEDIR@|$(libcacard_includedir)|' \
-	    -e 's|@VERSION@|$(shell cat $(SRC_PATH)/VERSION)|' \
+	    -e 's|@VERSION@|$(shell cat $(SRC_PATH)/VERSION.txt)|' \
 		-e 's|@PREFIX@|$(prefix)|' $< > libcacard.pc,\
 	"  GEN   $@")
 
