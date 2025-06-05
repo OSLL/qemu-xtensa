@@ -6744,7 +6744,7 @@ static const XtensaOpcodeOps fpu2000_ops[] = {
     }, {
         .name = "round.s",
         .translate = translate_ftoi_s,
-        .par = (const uint32_t[]){float_round_nearest_even, false},
+        .par = (const uint32_t[]){float_round_ties_away, false},
         .coprocessor = 0x1,
     }, {
         .name = "rur.fcr",
@@ -7476,12 +7476,12 @@ static const XtensaOpcodeOps fpu_ops[] = {
     }, {
         .name = "round.d",
         .translate = translate_ftoi_d,
-        .par = (const uint32_t[]){float_round_nearest_even, false},
+        .par = (const uint32_t[]){float_round_ties_away, false},
         .coprocessor = 0x1,
     }, {
         .name = "round.s",
         .translate = translate_ftoi_s,
-        .par = (const uint32_t[]){float_round_nearest_even, false},
+        .par = (const uint32_t[]){float_round_ties_away, false},
         .coprocessor = 0x1,
     }, {
         .name = "rur.fcr",
