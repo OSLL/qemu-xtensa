@@ -1,0 +1,7 @@
+XTENSA_SRC = $(SRC_PATH)/tests/tcg/xtensa
+VPATH += $(XTENSA_SRC)
+
+XTENSA_TESTS = test_fp_signal
+
+TESTS += $(XTENSA_TESTS)
+QEMU_OPTS += -cpu $(CORE)

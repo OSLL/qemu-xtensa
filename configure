@@ -1768,10 +1768,6 @@ for target in $target_list; do
   arch=${target%%-*}
 
   case $target in
-    xtensa*-linux-user)
-      # the toolchain is not complete with headers, only build system tests
-      continue
-      ;;
     *-softmmu)
       test -f "$source_path/tests/tcg/$arch/Makefile.softmmu-target" || continue
       qemu="qemu-system-$arch"
