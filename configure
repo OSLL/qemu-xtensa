@@ -1574,14 +1574,17 @@ probe_target_compiler() {
         fi
         ;;
       *)
+	echo "case -> $1"
         if do_compiler "$target_cc" $target_cflags -o $TMPE $TMPC -static ; then
           build_static=y
           got_cross_cc=yes
+	  echo "break"
           break
         fi
         if do_compiler "$target_cc" $target_cflags -o $TMPE $TMPC ; then
           build_static=
           got_cross_cc=yes
+	  echo "break"
           break
         fi
         ;;
@@ -1777,7 +1780,9 @@ for target in $target_list; do
       ;;
   esac
 
+  echo "probing compiler for $target"
   if probe_target_compiler $target || test -n "$container_image"; then
+      echo "success!"
       test -n "$container_image" && build_static=y
       mkdir -p "tests/tcg/$target"
       config_target_mak=tests/tcg/$target/config-target.mak

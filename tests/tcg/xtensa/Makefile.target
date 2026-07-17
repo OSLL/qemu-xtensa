@@ -1,3 +1,4 @@
+$(info ************************** Here!!! **************************)
 XTENSA_SRC = $(SRC_PATH)/tests/tcg/xtensa
 VPATH += $(XTENSA_SRC)
 
